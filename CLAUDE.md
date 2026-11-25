@@ -71,6 +71,7 @@ docs/      상세 문서
 
 ## 협업
 - main 직접 push 금지. 기능 브랜치 → **PR로 merge, 승인 불필요** (본인이 바로 merge 가능).
+- **Claude는 `git push` 전에 반드시 사용자에게 묻는다.** 커밋까지만 하고, push할 브랜치·커밋 목록을 보여준 뒤 허락받으면 push. 한 번 허락은 그 push에만 해당.
 - 경계 인터페이스(시리얼 메시지, Supabase 스키마·API)는 **docs 먼저** 바꾸고 상대 담당자에게 알린다.
 - Supabase 스키마는 `db/migrations/`에 새 번호 파일로만 바꾼다 (적용된 파일 수정 금지).
 - 대시보드 API 필드 이름·주기는 [docs/api.md](docs/api.md) 명세를 그대로 따른다.
