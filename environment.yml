@@ -1,0 +1,43 @@
+# PD-Dog 팀 공용 conda 환경
+#   conda env create -f environment.yml
+#   conda activate pd-dog
+#   (수정 후) conda env update -f environment.yml --prune
+#
+# 패키지를 추가하면 이 파일도 같은 PR에서 수정하세요.
+#
+# Python 버전: Pi 5의 시스템 Python과 "minor 버전까지" 같아야
+# apt로 설치되는 picamera2/libcamera/hailort를 conda 환경에서 연결할 수 있습니다.
+#   - Raspberry Pi OS Bookworm: 3.11
+#   - Raspberry Pi OS Trixie:   3.13
+# TODO(B): Pi에서 `python3 --version` 확인 후 아래 값을 확정. (docs/setup.md)
+name: pd-dog
+channels:
+  - conda-forge
+  - nodefaults
+dependencies:
+  - python=3.11
+  - pip
+  # ── 공통 ──
+  - numpy
+  - pyyaml
+  - python-dotenv
+  - requests
+  - pyserial          # ESP32 USB 시리얼
+  - smbus2            # X1200 잔량 칩 (I²C 0x36)
+  # ── 음성 입력 ──
+  - portaudio
+  - python-sounddevice
+  # ── 개발 도구 ──
+  - pytest
+  - ruff
+  - pre-commit
+  - pip:
+      - mpremote      # ESP32 MicroPython 파일 업로드
+      - vosk          # 음성 명령 (한국어 small 모델은 별도 다운로드)
+      # TODO(B): Silero VAD, ECAPA-TDNN 실행 방식 확정 후 추가 (torch vs onnxruntime)
+      #   - onnxruntime        (가벼움, Pi 권장 후보)
+      #   - silero-vad
+      #   - speechbrain        (torch 필요, 무거움)
+      # TODO(A): 비전 추론 방식 확정 후 추가
+      #   - ultralytics        (학습·변환은 PC에서, Pi는 추론만)
+      #   - picamera2 / hailort 은 apt 설치 → docs/setup.md 참고 (여기 넣지 말 것)
