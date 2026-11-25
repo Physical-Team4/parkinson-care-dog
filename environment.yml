@@ -7,15 +7,15 @@
 #
 # Python 버전: Pi 5의 시스템 Python과 "minor 버전까지" 같아야
 # apt로 설치되는 picamera2/libcamera/hailort를 conda 환경에서 연결할 수 있습니다.
-#   - Raspberry Pi OS Bookworm: 3.11
-#   - Raspberry Pi OS Trixie:   3.13
-# TODO(B): Pi에서 `python3 --version` 확인 후 아래 값을 확정. (docs/setup.md)
+#   Pi 5 OS = Raspberry Pi OS Lite (Debian 13 trixie), 시스템 Python 3.13.5 → python=3.13
+#   (docs/decisions.md D-007). OS를 바꾸면 이 값도 같이 바꿀 것.
+# aarch64 + Python 3.13에서 전체 설치가 되는지는 Pi에서 확인 예정 (docs/todo.md).
 name: pd-dog
 channels:
   - conda-forge
   - nodefaults
 dependencies:
-  - python=3.11
+  - python=3.13
   - pip
   # ── 공통 ──
   - numpy

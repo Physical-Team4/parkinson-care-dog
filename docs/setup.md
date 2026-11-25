@@ -15,6 +15,8 @@ PC에서는 하드웨어·Supabase adapter 대신 mock이 동작한다 (인터�
 
 ### 2-1. OS·기본 설정
 - Raspberry Pi OS Lite (64-bit), 호스트명 `pd-dog`, 시간대 `Asia/Seoul` (일별 집계 기준).
+  - 확인됨 (2026-11-26, A): Debian 13 **trixie**, 커널 6.18, 시스템 Python **3.13.5** → `environment.yml`은 `python=3.13` ([decisions.md](decisions.md) D-007).
+  - 하드웨어 인식 확인됨: `lspci`에 Hailo, `rpicam-hello --list-cameras`에 imx708(카메라 모듈 3), `vcgencmd get_throttled` = `0x0`.
 - `sudo raspi-config` → I²C 켜기 (X1200 잔량 칩).
 - EEPROM: `sudo rpi-eeprom-config --edit` → `PSU_MAX_CURRENT=5000` (X1200 위키에서 재확인).
 - 시리얼 권한: `sudo usermod -aG dialout,video,i2c,gpio $USER` 후 재로그인.
@@ -53,10 +55,31 @@ python3 -m venv --system-site-packages ~/pd-dog-venv
 ```
 - PC는 conda, Pi는 venv로 갈리게 되므로 **결정 전에 팀에 알릴 것** ([todo.md](todo.md)).
 
+**numpy 충돌 확인**
+방법 A에서는 conda numpy와 시스템(apt) numpy가 둘 다 경로에 있다. `.pth`가 시스템 경로를 맨 뒤에 붙이므로
+정상이면 **conda numpy**가 불린다. `check_pi_env.sh`가 picamera2·hailo_platform import 후의 `numpy.__file__`과
+시스템 numpy 버전을 출력한다.
+- `numpy.__file__`이 `$CONDA_PREFIX/...` → 정상.
+- `/usr/lib/python3/dist-packages/...` → 시스템 numpy가 먼저 불림. `python -c "import sys; print(sys.path)"`로
+  `pd_dog_system.pth` 경로가 맨 뒤인지, `PYTHONPATH`에 시스템 경로가 들어가 있지 않은지 확인.
+- import 중 `numpy.dtype size changed`, `module compiled against ABI version ...`, `_ARRAY_API not found` 같은 오류
+  → apt 확장 모듈(libcamera·simplejpeg·hailort 바인딩 등)은 **시스템 numpy 버전으로 빌드**돼 있어서 conda numpy와
+  major(1.x/2.x)가 다르면 깨진다. 정리 방법 (위에서부터 시도):
+  1. `environment.yml`의 numpy를 시스템 numpy와 같은 major.minor로 고정 (예: 시스템이 2.2.x면 `numpy=2.2`) 후
+     `conda env update -f environment.yml --prune`. 고정했으면 이 섹션과 [decisions.md](decisions.md)에 기록.
+  2. 그래도 안 되면 conda numpy를 빼고 시스템 numpy를 쓰는 방법은 쓰지 않는다 (conda 패키지들이 깨짐) → 방법 B 검토.
+
 결과(어떤 방법이 됐는지, 필요한 추가 명령)를 이 섹션에 기록한다.
 - [ ] picamera2 import: (결과 기록)
 - [ ] libcamera import: (결과 기록)
 - [ ] hailo_platform import: (결과 기록)
+- [ ] numpy: conda / 시스템 중 어느 쪽, 버전 (결과 기록)
+
+### 2-3-1. AI HAT+ 13T = Hailo-8L
+- AI HAT+ 13 TOPS의 칩은 **Hailo-8L**이다 (`lspci`에는 "Hailo-8"로 나올 수 있음 → `hailortcli fw-control identify`의
+  Device Architecture가 `HAILO8L`인지 확인).
+- **`.hef`는 hailo8l 대상으로 컴파일된 것만 사용한다.** Hailo-8(26T)용 `.hef`는 Hailo-8L에서 로드되지 않거나
+  제대로 동작하지 않는다. Model Zoo에서 받을 때도 `hailo8l` 폴더·파일을 고르고, DFC로 변환할 때도 대상 `hailo8l`.
 
 ### 2-4. ESP32 시리얼 포트 고정 (TODO)
 `/dev/ttyUSB0` 번호가 바뀔 수 있으니 udev 규칙으로 `/dev/pd-dog-esp32` 고정 예정.
@@ -120,3 +143,4 @@ done
 ## 5. 모델 파일
 가중치는 레포에 넣지 않는다. `PD_DOG_MODEL_DIR`(기본 `~/pd-dog-models`)에 받는다.
 받는 명령: `pi/scripts/download_models.sh` (TODO: A·B가 모델 확정 후 작성).
+Hailo용 `.hef`는 hailo8l 대상만 ([2-3-1](#2-3-1-ai-hat-13t--hailo-8l)).
