@@ -32,6 +32,12 @@
 - main 직접 push 금지, 기능 브랜치 → PR → 본인이 바로 merge 가능.
 - CODEOWNERS 사용 안 함. 브랜치 보호: PR 필수, 승인 0명, force push 금지 ([CONTRIBUTING.md](../CONTRIBUTING.md)).
 
+## D-006 Pi 로봇 코드에는 Docker를 쓰지 않는다 (확정, 2026-11-26)
+- Pi 로봇 코드(`pi/`)는 Docker 없이 실행한다.
+  - 이유: 카메라·Hailo(PCIe)·USB 시리얼·마이크·I²C를 컨테이너에 연결하기 번거롭고, Pi 5 램 4GB에 부담.
+- Pi 환경은 conda로 통일한다 (D-003).
+- Docker는 하드웨어와 무관한 곳에서 필요할 때만 쓴다. 예: 대시보드 백엔드, Supabase 로컬 테스트(supabase CLI).
+
 ## DB 적용 기록
 Supabase에 마이그레이션을 적용하면 여기에 남긴다.
 
