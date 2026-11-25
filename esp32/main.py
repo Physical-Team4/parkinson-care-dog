@@ -5,6 +5,8 @@ import config
 from controllers.serial_cmd import SerialCommands, log
 from controllers.heartbeat import Heartbeat
 from drivers.laser import Laser
+from drivers.mp3 import Mp3
+from services.gait import Gait
 from services.rhythm import Rhythm
 from services.medication import Medication
 from services.touch import Touch
@@ -14,7 +16,9 @@ def main():
     laser = Laser(config.LASER_PIN)
     laser.off()
     hb = Heartbeat(config.PI_TIMEOUT_MS)
-    rhythm = Rhythm(laser)
+    mp3 = Mp3()
+    gait = Gait()
+    rhythm = Rhythm(laser, gait, mp3)
     medication = Medication()
     touch = Touch()
     serial = SerialCommands(hb, rhythm, medication)

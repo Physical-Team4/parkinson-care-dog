@@ -17,8 +17,9 @@ TOF_ADDR = 0x29
 TOF_ENABLED = False         # TODO(C): 핀 순서·VCC 전압 확인 후 True
 
 # ── 포트 2: MP3 (IIC1) ──
-MP3_I2C_BUS = 1
-MP3_TRACK_BEAT = None       # TODO(D): SD카드 트랙 번호 정하기
+MP3_I2C_BUS = 1             # pinmap 기준 IIC1. TODO(C·D): 실기기 테스트에서는 IIC2로도 재생됨 → 실제 연결 포트 확인
+MP3_VOLUME = 25             # F3 테스트에서 쓴 값
+MP3_TRACK_BEAT = None       # TODO(C·D): SD카드에서 박자음(박수) 트랙 번호 확인 후 입력 (테스트 때는 30 사용, 박수 소리 아님)
 MP3_TRACK_ALARM = None
 MP3_TRACK_MEDICATION = None
 MP3_TRACK_PI_LOW = None     # TODO(D): "로봇 배터리를 충전해 주세요" 안내 (pi_low)
@@ -33,3 +34,11 @@ BPM_MAX = 110
 BPM_DEFAULT = 96
 FOLLOW_LIMIT_CM_DEFAULT = 150
 LASER_BLINK_MS = 100        # 박자마다 켜지는 시간
+
+# ── F3 보행 (services/gait.py). 실기기 테스트 값 ──
+GAIT_SPEED = 25             # move() 첫 번째 값 (보폭)
+GAIT_STEP_BEAT_RATIO = 1    # 걸음 1번 시간 = 박자 간격 × 이 값. 발이 박자보다 2배 자주 닿으면 2, 절반이면 0.5
+GAIT_LIFT_MS = 150          # 다리가 공중에 있는 시간 (짧을수록 덜 흔들림)
+GAIT_LIFT_HEIGHT_MM = 25    # 다리 드는 높이 (낮을수록 안정적)
+GAIT_START_DELAY_MS = 100   # 걸음 설정 후 출발까지 대기
+GAIT_STOP_POSE_DELAY_MS = 1000  # 정지 후 기본 자세로 돌아가기까지

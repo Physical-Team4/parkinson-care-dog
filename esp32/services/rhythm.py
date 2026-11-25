@@ -5,35 +5,46 @@ import config
 
 
 class Rhythm:
-    def __init__(self, laser):
+    def __init__(self, laser, gait, mp3):
         self.laser = laser
+        self.gait = gait
+        self.mp3 = mp3
         self.mode = "idle"            # idle / walking / paused
         self.bpm = config.BPM_DEFAULT
         self.follow_limit_cm = config.FOLLOW_LIMIT_CM_DEFAULT
         self.follow_distance_cm = None
+        self.beat_count = 0
         self._next_beat = None
         self._laser_off_at = None
         self._forced_laser = None
+
+    def _beat_ms(self):
+        return 60000 // self.bpm
 
     def start(self, bpm):
         ok, err = self.set_bpm(bpm)
         if not ok:
             return ok, err
         self.mode = "walking"
+        self.beat_count = 0
         self._next_beat = utime.ticks_ms()
-        # TODO(C): MechDog 보행 시작 (services/gait.py)
+        self.gait.set_tempo(self._beat_ms())
+        self.gait.walk(config.GAIT_SPEED)
         return True, None
 
     def stop(self):
         self.mode = "idle"
         self._next_beat = None
         self.laser.off()
-        # TODO(C): MechDog 보행 정지
+        self.gait.stop()
+        self.mp3.pause()
 
     def set_bpm(self, bpm):
         if bpm is None or not (config.BPM_MIN <= bpm <= config.BPM_MAX):
             return False, "bpm range"
         self.bpm = bpm
+        if self.mode == "walking":
+            self.gait.set_tempo(self._beat_ms())
         return True, None
 
     def force_laser(self, on):
@@ -47,6 +58,7 @@ class Rhythm:
             self.follow_limit_cm = msg["follow_limit_cm"]
 
     def tick(self, now):
+        self.gait.tick(now)
         if self._laser_off_at is not None and utime.ticks_diff(now, self._laser_off_at) >= 0:
             if self._forced_laser is None:
                 self.laser.off()
@@ -58,5 +70,7 @@ class Rhythm:
             if self._forced_laser is None:
                 self.laser.on()
                 self._laser_off_at = utime.ticks_add(now, config.LASER_BLINK_MS)
-            # TODO(C): MP3 박자음
-            self._next_beat = utime.ticks_add(self._next_beat, 60000 // self.bpm)
+            self.mp3.play(config.MP3_TRACK_BEAT)   # 트랙 번호 None이면 소리 없이 진행
+            self.beat_count += 1
+            # 예정 시각 기준으로 다음 박자를 잡아 밀리지 않게 함
+            self._next_beat = utime.ticks_add(self._next_beat, self._beat_ms())
