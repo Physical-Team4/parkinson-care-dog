@@ -101,7 +101,7 @@ Hiwonder.startMain(read_sonar)
 | 40 이상 | 보라 (204, 51, 204) | move(120, 0) 직진 |
 | 종료 시 | 파랑 (51, 51, 255) | move(0, 0) 정지 |
 
-- 모션 제어 함수(move, transform)는 feature/motion-control 브랜치 문서 참고
+- 모션 제어 함수(move, transform)는 feature/rhythm-cueing 브랜치 문서 참고
 
 ## 자주 겪는 문제
 
