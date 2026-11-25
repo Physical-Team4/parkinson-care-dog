@@ -25,16 +25,4 @@ class UsbMicrophone:
     def record(self, seconds: float) -> np.ndarray:
         raise NotImplementedError
 
-
-class X1200PowerMonitor:
-    """TODO(D): smbus2로 I²C 0x36 잔량, GPIO6 전원 차단 감지 (다른 용도 금지).
-    CPU 온도는 /sys/class/thermal/thermal_zone0/temp."""
-
-    def battery_pct(self) -> float | None:
-        raise NotImplementedError
-
-    def charging(self) -> bool | None:
-        raise NotImplementedError
-
-    def cpu_temp_c(self) -> float | None:
-        raise NotImplementedError
+# X1200 → x1200.py, 안전 종료 → host.py

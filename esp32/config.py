@@ -21,6 +21,7 @@ MP3_I2C_BUS = 1
 MP3_TRACK_BEAT = None       # TODO(D): SD카드 트랙 번호 정하기
 MP3_TRACK_ALARM = None
 MP3_TRACK_MEDICATION = None
+MP3_TRACK_PI_LOW = None     # TODO(D): "로봇 배터리를 충전해 주세요" 안내 (pi_low)
 
 # ── F1 복약 (Pi가 settings로 덮어씀) ──
 MED_TIMES_DEFAULT = ["08:00", "12:30", "18:00", "22:00"]

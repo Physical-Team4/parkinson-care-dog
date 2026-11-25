@@ -18,12 +18,13 @@ PC에서는 하드웨어·Supabase adapter 대신 mock이 동작한다 (인터�
   - 확인됨 (2026-11-26, A): Debian 13 **trixie**, 커널 6.18, 시스템 Python **3.13.5** → `environment.yml`은 `python=3.13` ([decisions.md](decisions.md) D-007).
   - 하드웨어 인식 확인됨: `lspci`에 Hailo, `rpicam-hello --list-cameras`에 imx708(카메라 모듈 3), `vcgencmd get_throttled` = `0x0`.
 - `sudo raspi-config` → I²C 켜기 (X1200 잔량 칩).
-- EEPROM: `sudo rpi-eeprom-config --edit` → `PSU_MAX_CURRENT=5000` (X1200 위키에서 재확인).
+- EEPROM `PSU_MAX_CURRENT=5000`: 절차는 [2-6](#2-6-x1200-ups).
 - 시리얼 권한: `sudo usermod -aG dialout,video,i2c,gpio $USER` 후 재로그인.
 - 시스템 패키지 (apt):
   ```bash
   sudo apt install -y python3-picamera2 --no-install-recommends
   sudo apt install -y hailo-all          # AI HAT+ 사용 시 (A의 벤치마크 결과에 따라)
+  sudo apt install -y python3-gpiozero python3-lgpio i2c-tools   # X1200 GPIO6·I²C (2-6)
   ```
 
 ### 2-2. Miniforge + conda 환경
@@ -90,6 +91,57 @@ python3 -m venv --system-site-packages ~/pd-dog-venv
 bash pi/scripts/run.sh
 ```
 자동 시작(systemd 서비스)은 TODO.
+
+### 2-6. X1200 UPS
+부품·충전 방법은 [hardware.md](hardware.md#전원), 배터리 셀 선택 이유는 [decisions.md](decisions.md) D-008.
+
+**1) EEPROM 전류 한도** — X1200은 Pi 5 공식 27W 어댑터처럼 5A를 알리지 않으므로 직접 설정.
+그대로 두면 USB 출력이 600mA로 제한되고 "전원 부족" 경고가 뜰 수 있다.
+```bash
+sudo rpi-eeprom-config --edit
+#   [all] 아래 맨 끝에 한 줄 추가:  PSU_MAX_CURRENT=5000
+#   nano 저장: Ctrl+O → Enter → Ctrl+X
+sudo reboot
+sudo rpi-eeprom-config | grep PSU_MAX_CURRENT    # 재부팅 후 확인
+```
+값 5000은 X1200 위키에서 재확인 (todo.md).
+
+**2) I²C 잔량 칩 확인** (2-1에서 I²C를 켠 뒤)
+```bash
+i2cdetect -y 1          # 표에 36 이 보이면 OK
+```
+
+**3) GPIO6 전원 감지 극성 실측** → `.env`의 `X1200_PLD_POWER_OK_LEVEL`
+레포 루트, `pd-dog` 환경에서:
+```bash
+python -m pi.app.adapters.x1200
+```
+1초마다 `SOC`·`VCELL`·`GPIO6`·`CPU` 값이 나온다. X1200 USB-C 충전기를 꽂았다 뺐다 하며 `GPIO6` 값을 본다.
+충전기를 꽂았을 때 값(0 또는 1)을 Pi의 `.env`에 `X1200_PLD_POWER_OK_LEVEL=<값>`으로 넣는다.
+비워 두면 전원 감지와 `pi_charging`이 꺼진다 (null). 결과는 이 섹션에 기록:
+- [ ] `i2cdetect` 0x36: (결과)
+- [ ] SOC·VCELL이 멀티미터 전압과 맞는지: (결과)
+- [ ] 충전기 연결 시 GPIO6 = (0/1)
+
+**4) 안전 종료 권한** — 앱이 배터리 10% 미만에서 `sudo -n /usr/sbin/shutdown -h now`를 실행한다.
+비밀번호 없이 이 명령 하나만 허용 (`<user>`는 Pi 사용자 이름):
+```bash
+echo '<user> ALL=(root) NOPASSWD: /usr/sbin/shutdown' | sudo tee /etc/sudoers.d/pd-dog-shutdown
+sudo chmod 440 /etc/sudoers.d/pd-dog-shutdown
+sudo visudo -c                       # 문법 확인 (오류면 바로 지울 것)
+sudo -n /usr/sbin/shutdown --help >/dev/null && echo OK
+```
+
+**배터리 정책** (`pi/app/services/power.py`, 값은 `pi/app/config.py`):
+
+| 조건 | 동작 |
+|---|---|
+| 잔량 < 20% | ESP32에 `pi_low` 1번 → 경보 모드 준비 + MP3 안내. 25% 이상 회복·충전 시 다시 보낼 수 있음 |
+| 잔량 < 10%가 5초 간격 3번 연속 (충전 중 제외) | ESP32에 `shutdown` → 대기열 재전송 시도 → 대기열 닫기 → OS 종료 |
+| 외부 전원 차단 3번 연속 | `PI_SHUTDOWN_ON_POWER_LOSS=true`일 때만 위와 같이 종료 (기본 꺼짐, todo.md) |
+
+- 대기열(SQLite)은 알람이 생길 때마다 바로 디스크에 저장되므로 종료 후 다음 부팅에 재전송된다.
+- 대시보드 battery_low 알람은 DB 트리거가 `robot_status`에서 만든다 (Pi가 따로 안 보냄).
 
 ## 3. Supabase (D가 1회)
 1. Supabase에서 프로젝트 생성 (리전: 서울 `ap-northeast-2` 권장).

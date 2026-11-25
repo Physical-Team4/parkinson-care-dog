@@ -17,6 +17,7 @@
 | `POST /api/robot/pose` | 약 0.4초 | `state`: none / standing / sitting / falling / lying, `keypoints`: COCO 17 × `[x, y, conf]` (0~1) | Realtime Broadcast `robot:pose` / `pose` | A | ✗ (버림) |
 | `GET /api/settings` | 로봇이 가져감 | 아래 형식 | `select settings`, `medication_schedule` | B (→ ESP32 `settings`) | — |
 
+- `pi_battery_pct`: X1200 잔량 칩(I²C 0x36), `pi_charging`: X1200 USB-C에 충전기 연결됨(GPIO6 전원 감지). 읽기 실패·미설정이면 `null`.
 - "시각은 서버가 기록" → 대기열 때문에 바뀜: 알람은 Pi가 `occurred_at`을 보내고, 도착 시각은 `received_at`에 따로 남는다.
 - "같은 종류 30초 내 중복은 1건으로" → `report_alert`가 처리 ([db.md](db.md#알람)).
 

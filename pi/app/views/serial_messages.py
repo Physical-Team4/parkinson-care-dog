@@ -19,7 +19,9 @@ LASER = "laser"
 SETTINGS = "settings"
 MED_ACK = "med_ack"
 SOUND = "sound"
+PI_LOW = "pi_low"
 SHUTDOWN = "shutdown"
+SHUTDOWN_REASONS = ("battery", "power_loss")
 
 # ESP32 → Pi
 STATUS = "status"
@@ -72,3 +74,15 @@ def stop(msg_id: int) -> bytes:
 
 def heartbeat() -> bytes:
     return encode(HEARTBEAT)
+
+
+def pi_low(pct: float, msg_id: int) -> bytes:
+    """Pi 배터리 부족 → ESP32 경보 모드 준비 + MP3 안내."""
+    return encode(PI_LOW, msg_id, pct=round(pct))
+
+
+def shutdown(reason: str, msg_id: int) -> bytes:
+    """Pi가 곧 꺼짐. 이후 hb가 끊기므로 ESP32는 MP3 경보 경로로 (D-001)."""
+    if reason not in SHUTDOWN_REASONS:
+        raise ValueError(f"reason must be one of {SHUTDOWN_REASONS}")
+    return encode(SHUTDOWN, msg_id, reason=reason)

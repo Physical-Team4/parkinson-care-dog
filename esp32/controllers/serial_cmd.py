@@ -25,6 +25,9 @@ class SerialCommands:
         self._poll = select.poll()
         self._poll.register(sys.stdin, select.POLLIN)
         self._buf = ""
+        # Pi 배터리 상태 (pi_low / shutdown). 서비스가 보고 경보 모드를 준비한다 (D-001)
+        self.pi_battery_low = False
+        self.pi_shutting_down = False
 
     def poll(self):
         # 읽을 수 있는 동안만 한 글자씩 (블로킹 금지)
@@ -65,8 +68,17 @@ class SerialCommands:
             self.rhythm.apply_settings(msg)
         elif t == "med_ack":
             self.medication.confirm(msg.get("due"), "voice")
+        elif t == "pi_low":
+            # TODO(D): MP3 안내 config.MP3_TRACK_PI_LOW 재생 (트랙 번호 미정 → None이면 생략)
+            self.pi_battery_low = True
+            log("pi battery low " + str(msg.get("pct")))
+        elif t == "shutdown":
+            # Pi가 곧 꺼짐 → hb 끊김 전에 경보 모드로. TODO(D): 경보 모드 전환·MP3
+            self.pi_battery_low = True
+            self.pi_shutting_down = True
+            log("pi shutdown " + str(msg.get("reason")))
         else:
-            # TODO(D): sound, shutdown
+            # TODO(D): sound
             ok, err = False, "unknown"
         if msg_id is not None:
             reply = {"t": "ack", "id": msg_id, "ok": ok}

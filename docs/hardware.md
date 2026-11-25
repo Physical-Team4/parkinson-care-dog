@@ -26,7 +26,12 @@
 - Pi ↔ 대시보드: HTTP.
 
 ## 전원
-- Pi: 18650 × 2 → X1200 → 5.1V 5A. 충전은 X1200 USB-C에 Pi 5용 PD 27W.
+- Pi: 18650 × 2 → **Suptronics X1200 v1.2** → Pi 5 밑면 포고 핀으로 5.1V 5A.
+  - 배터리: **무보호 플랫탑 18650 3000~3500mAh × 2**. 보호회로 셀은 AI 추론 같은 순간 고부하에서 보호회로가
+    전원을 끊어 Pi가 재부팅될 수 있어 제외 ([decisions.md](decisions.md) D-008).
+  - 충전: **Pi 5용 27W PD 어댑터를 X1200의 USB-C**에 연결. **Pi 본체 USB-C는 사용 안 함.**
+  - 잔량: I²C 0x36 잔량 칩 → 대시보드 `pi_battery_pct`. 외부 전원 감지: GPIO6 → `pi_charging`.
+  - 배터리 부족 시 동작·설정 절차: [setup.md](setup.md#2-6-x1200-ups).
 - MechDog: 기본 7.4V 1500mAh LiPo.
 - Pi EEPROM: `PSU_MAX_CURRENT=5000` (X1200 위키에서 재확인).
 - 추가 적재 약 270~280 g, 보행 테스트 통과.

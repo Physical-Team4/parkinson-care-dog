@@ -87,14 +87,34 @@ class MockMicrophone:
 
 
 class MockPowerMonitor:
+    """값을 바꿔 가며 배터리 정책을 시험한다. power_ok=None이면 GPIO6 미설정 상태."""
+
+    def __init__(self, pct: float | None = 100.0, power_ok: bool | None = False,
+                 temp_c: float | None = 45.0) -> None:
+        self.pct = pct
+        self.ok = power_ok
+        self.temp_c = temp_c
+
     def battery_pct(self) -> float | None:
-        return 100.0
+        return self.pct
+
+    def power_ok(self) -> bool | None:
+        return self.ok
 
     def charging(self) -> bool | None:
-        return False
+        return self.ok
 
     def cpu_temp_c(self) -> float | None:
-        return 45.0
+        return self.temp_c
+
+
+class MockHost:
+    def __init__(self) -> None:
+        self.poweroff_calls = 0
+
+    def poweroff(self) -> None:
+        log.warning("mock poweroff")
+        self.poweroff_calls += 1
 
 
 class MockNotifier:
