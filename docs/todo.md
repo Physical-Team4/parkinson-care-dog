@@ -41,3 +41,11 @@
 | 보호자 메신저 종류 (Telegram 등) | 미정 | D | `.env` 변수, notifier adapter |
 | 라이선스 | 미정 | 전원 | `LICENSE` |
 | X1200 `PSU_MAX_CURRENT=5000` | 위키 재확인 필요 | D | Pi EEPROM |
+| X1200 v1.2가 GPIO6 외에 쓰는 핀 | 미확정 (충전 제어 핀 등). 위키·회로도 확인 후 [pinmap.md](pinmap.md)에 기록 | D | Pi GPIO 배정 |
+| X1200 GPIO6 극성 | 충전기 연결 시 0/1 실측 → `.env` `X1200_PLD_POWER_OK_LEVEL` ([setup.md](setup.md) 2-6) | D·B | `pi_charging`, 전원 차단 감지 |
+| X1200 잔량 칩 값 | SOC(0x04)·VCELL(0x02) 형식이 맞는지 멀티미터 전압과 비교 | D·B | `pi_battery_pct` |
+| 충전 중 여부 | 지금 `pi_charging` = 충전기 연결 여부 (실제 충전 중인지와 다를 수 있음, 만충 후에도 true) | D | 대시보드 표시 |
+| 외부 전원 차단 시 종료 여부 | 로봇은 평소 배터리로 주행 → 충전기 뽑을 때마다 종료되면 안 됨. 기본 꺼짐(`PI_SHUTDOWN_ON_POWER_LOSS=false`), 팀 합의 필요 | D·B | `services/power.py` |
+| Pi 안전 종료 잔량 기준 | 임시 10% (5~10% 사이). 부하 테스트 결과로 `pi/app/config.py` 조정 | D·B | 종료 시점 |
+| AI 추론 중 부하 테스트 | Hailo 추론 + 카메라 + 서보 동작 상태로 10~20분, `vcgencmd get_throttled`로 저전압(0x50005 등) 확인, 잔량 감소 속도 기록 | A·D | 전원, 배터리 정책 |
+| ESP32 `pi_low` 처리 | 플래그만 세움. MP3 트랙(`MP3_TRACK_PI_LOW`)·경보 모드 전환 구현 필요 | D | F1·F2 경보 |

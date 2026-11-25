@@ -30,7 +30,8 @@
 | `settings` | `med_times` (["HH:MM", ...] 1~8개), `bpm`, `follow_limit_cm` | 대시보드 설정 전달. 부팅·변경 시 | D |
 | `med_ack` | `due` ("HH:MM") | 음성으로 복약 확인됨 | D |
 | `sound` | `track` (int) | MP3 재생 | D |
-| `shutdown` | — | Pi 배터리 부족으로 종료 예정 | D |
+| `pi_low` | `pct` (int) | Pi 배터리 20% 미만 (값은 `pi/app/config.py`). 한 번만 보내고, 회복·충전 후 다시 내려가면 또 보냄. ESP32는 경보 모드 준비 + MP3 안내 (`MP3_TRACK_PI_LOW`) | B·D |
+| `shutdown` | `reason` (`"battery"` / `"power_loss"`) | Pi가 곧 안전 종료. 이후 `hb`가 끊기므로 ESP32는 MP3 경보 경로로 (D-001) | B·D |
 
 ## ESP32 → Pi
 

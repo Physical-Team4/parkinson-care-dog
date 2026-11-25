@@ -49,10 +49,20 @@ class Microphone(Protocol):
 
 
 class PowerMonitor(Protocol):
-    """X1200 (I²C 0x36 잔량, GPIO6 전원 차단 감지)."""
+    """X1200 (I²C 0x36 잔량, GPIO6 전원 차단 감지). 읽기 실패·미설정이면 None."""
     def battery_pct(self) -> float | None: ...
-    def charging(self) -> bool | None: ...
+    def power_ok(self) -> bool | None:
+        """외부 전원(X1200 USB-C 충전기) 연결 여부. GPIO6 극성 미설정이면 None."""
+        ...
+    def charging(self) -> bool | None:
+        """대시보드 pi_charging. 지금은 power_ok와 같음 (충전 상태 핀 미확정, docs/todo.md)."""
+        ...
     def cpu_temp_c(self) -> float | None: ...
+
+
+class HostSystem(Protocol):
+    """Pi OS 자체 제어 (안전 종료)."""
+    def poweroff(self) -> None: ...
 
 
 class Notifier(Protocol):

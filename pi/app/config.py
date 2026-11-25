@@ -27,6 +27,10 @@ def _int(value: str | None, default: int) -> int:
     return int(value) if value else default
 
 
+def _opt_int(value: str | None) -> int | None:
+    return int(value) if value not in (None, "") else None
+
+
 @dataclass(frozen=True)
 class Settings:
     mock_hardware: bool
@@ -38,6 +42,23 @@ class Settings:
     queue_path: Path          # 오프라인 대기열 SQLite (Supabase 재전송용)
     log_dir: Path
     model_dir: Path
+
+    # ── X1200 UPS (docs/hardware.md, docs/setup.md 2-6) ──
+    # GPIO6 전원 차단 감지(PLD)에서 "외부 전원 있음"일 때 읽히는 값 (0 또는 1).
+    # 미확정 → None이면 전원 차단 감지·pi_charging 끔 (경고). setup.md 2-6에서 실측 후 .env에.
+    x1200_pld_power_ok_level: int | None = None
+    # 외부 전원이 빠지면 종료할지. 로봇은 평소 배터리로 다니므로 기본 False (docs/todo.md)
+    pi_shutdown_on_power_loss: bool = False
+    x1200_i2c_bus: int = 1          # GPIO 2·3 (I²C1)
+    x1200_i2c_addr: int = 0x36      # 잔량 칩
+    x1200_pld_gpio: int = 6         # ⚠️ 다른 용도 금지
+
+    # ── Pi 배터리 정책 (services/power.py) ──
+    pi_battery_low_pct: float = 20.0        # 미만 → ESP32에 pi_low (대시보드 battery_low 기준과 같음)
+    pi_battery_low_clear_pct: float = 25.0  # 이 이상으로 회복하면 pi_low 다시 보낼 수 있음
+    pi_battery_shutdown_pct: float = 10.0   # 미만 → 안전 종료. 5~10 사이에서 부하 테스트 후 조정 (todo.md)
+    pi_shutdown_confirm_checks: int = 3     # 연속 N번 확인돼야 종료 (순간 전압 강하 무시)
+    power_check_interval_s: float = 5.0
 
     # 주기 (docs/api.md)
     status_interval_s: float = 2.0
@@ -65,4 +86,6 @@ def load_settings(env_file: Path | None = None) -> Settings:
         queue_path=Path(env.get("PD_DOG_QUEUE_PATH") or data_dir / "outbox.db"),
         log_dir=Path(env.get("PD_DOG_LOG_DIR") or data_dir / "logs"),
         model_dir=Path(env.get("PD_DOG_MODEL_DIR") or Path.home() / "pd-dog-models"),
+        x1200_pld_power_ok_level=_opt_int(env.get("X1200_PLD_POWER_OK_LEVEL")),
+        pi_shutdown_on_power_loss=_bool(env.get("PI_SHUTDOWN_ON_POWER_LOSS"), default=False),
     )
