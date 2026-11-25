@@ -19,7 +19,7 @@
 | 포즈 Broadcast 메시지 수 | 24시간 0.4초 전송 시 월 약 650만 건 → 무료 한도 초과 가능. 시청 중일 때만 / 상태 변화 시만 보내기 중 선택 | A·D | [db.md](db.md#포즈-realtime-broadcast-검토-결과) |
 | Supabase 요금제 | 무료 플랜은 1주 미사용 시 프로젝트 일시정지 가능, DB 500MB 등 → 시연 일정에 맞춰 확인 | D | 운영 |
 | 대시보드 로그인 방식 | Supabase Auth (이메일 초대 제안), 공개 가입 끄기 | D | RLS (`care_team`) |
-| 004 적용 확인 | Realtime 정책·pg_cron은 Supabase에서만 확인 가능 | D | 첫 적용 때 |
+| 004 적용 확인 | 로컬 Supabase에서는 확인됨. 클라우드 첫 적용 때 pg_cron 확장 켜져 있는지 확인 | D | 첫 적용 때 |
 | 화자 임베딩 저장 위치 | Supabase에 올리지 않음(Pi 로컬). SQLite는 대기열 전용이므로 파일(예: `~/pd-dog-data/speakers/`) 등 B가 결정 | B | F5 |
 | Pi 시계 | 대기열 알람은 Pi `occurred_at` 사용 → NTP 필수. 오프라인 부팅 시 Pi 5 RTC 배터리 필요 여부 | B | 알람 시각 |
 

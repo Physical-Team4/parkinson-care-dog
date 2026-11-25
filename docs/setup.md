@@ -81,6 +81,39 @@ bash pi/scripts/run.sh
 5. Realtime → Settings: "Allow public access" 끄기 (private 채널만 사용).
 6. 적용 기록을 [decisions.md](decisions.md) "DB 적용 기록"에 남기기.
 
+### 3-1. 로컬 Supabase로 테스트 (선택, 각자 PC)
+클라우드 Supabase 없이 내 PC의 Docker에서 Supabase를 띄워 마이그레이션·RLS·API를 시험한다.
+하드웨어와 무관하므로 Docker 사용 OK ([decisions.md](decisions.md) D-006). Docker Desktop 실행 필요.
+
+```bash
+# 레포 루트에서. supabase/ 폴더는 개인용 → 커밋하지 않게 .git/info/exclude에 '/supabase/' 추가
+npx -y supabase@2.122.1 init --with-vscode-settings=false --with-intellij-settings=false
+npx -y supabase@2.122.1 start -x storage-api,imgproxy,edge-runtime,logflare,vector,supavisor
+npx -y supabase@2.122.1 status      # URL·로컬 키 확인 (로컬 전용 기본값)
+npx -y supabase@2.122.1 stop        # 끄기 (데이터 유지). 지우려면 stop --no-backup
+```
+
+마이그레이션 적용 (로컬 DB 컨테이너의 psql 사용, 001 → 004 순서):
+```bash
+for f in db/migrations/*.sql; do
+  docker exec -i supabase_db_parkinson-care-dog psql -U postgres -d postgres -v ON_ERROR_STOP=1 < "$f"
+done
+```
+- 로컬 Studio: http://localhost:54323
+- 로컬 API: http://localhost:54321 → 로컬 테스트 때만 `.env`의 `SUPABASE_URL`·키를 `status`에 나온 값으로
+
+### 3-2. Claude Code에 로컬 Supabase MCP 연결 (선택, 각자 PC)
+레포 루트에 `.mcp.json`을 만든다 (`.gitignore`에 있음, 커밋 금지):
+```json
+{
+  "mcpServers": {
+    "supabase-local": { "type": "http", "url": "http://localhost:54321/mcp" }
+  }
+}
+```
+- 로컬 Supabase가 켜져 있어야 연결된다. Claude Code를 다시 열면 이 서버를 쓸지 묻는다 → 허용.
+- 로컬 MCP는 로그인 없이 로컬 DB 전체에 접근한다. **클라우드(실제 데이터) 프로젝트에 연결할 때는 `read_only=true`로.**
+
 ## 4. ESP32
 [esp32/README.md](../esp32/README.md) 참고.
 
