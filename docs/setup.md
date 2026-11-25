@@ -23,9 +23,19 @@ PC에서는 하드웨어·Supabase adapter 대신 mock이 동작한다 (인터�
 - 시스템 패키지 (apt):
   ```bash
   sudo apt install -y python3-picamera2 --no-install-recommends
-  sudo apt install -y hailo-all          # AI HAT+ 사용 시 (A의 벤치마크 결과에 따라)
+  sudo apt install -y dkms linux-headers-rpi-2712   # ⚠️ hailo-all보다 먼저 (Hailo 드라이버 빌드용)
+  sudo apt install -y hailo-all          # AI HAT+
   sudo apt install -y python3-gpiozero python3-lgpio i2c-tools   # X1200 GPIO6·I²C (2-6)
+  sudo reboot
   ```
+- Hailo 확인: `hailortcli fw-control identify` → `Device Architecture: HAILO8L`.
+  - 확인됨 (2026-11-26, A): hailort 4.23.0, 펌웨어 4.23.0, 커널 6.18.60.
+- ⚠️ Hailo PCIe 드라이버(`hailo_pci`)는 **DKMS로 커널마다 빌드**된다. dkms 없이 `hailo-all`을 깔면
+  패키지는 설치돼도 모듈이 없어서 `/dev/hailo0`이 안 생기고 `hailortcli`가 아무것도 출력하지 않는다.
+  - 증상 확인: `lsmod | grep hailo` 비어 있음, `modprobe hailo_pci` → "not found".
+  - 해결: `sudo apt install -y dkms linux-headers-rpi-2712` → `sudo apt install --reinstall -y hailort-pcie-driver`
+    → `dkms status`에 `hailo_pci/<버전>, <uname -r>, aarch64: installed` → 재부팅.
+  - **커널 업데이트(`apt full-upgrade`) 후**에는 재부팅하고 `dkms status`와 `ls /dev/hailo0`을 확인한다.
 
 ### 2-2. Miniforge + conda 환경
 ```bash
