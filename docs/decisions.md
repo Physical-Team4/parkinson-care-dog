@@ -38,6 +38,14 @@
 - Pi 환경은 conda로 통일한다 (D-003).
 - Docker는 하드웨어와 무관한 곳에서 필요할 때만 쓴다. 예: 대시보드 백엔드, Supabase 로컬 테스트(supabase CLI).
 
+## D-007 conda 환경 Python은 3.13 (확정, 2026-11-26)
+- Pi 5 OS가 Raspberry Pi OS Lite (Debian 13 trixie), 시스템 Python 3.13.5로 확인됨.
+- `environment.yml`의 `python=3.11` → `python=3.13`. PC·Pi 같은 값.
+  - 이유: apt로 설치되는 picamera2·libcamera·hailort(`hailo_platform`)는 시스템 Python용으로 빌드됨.
+    conda 환경에서 쓰려면 minor 버전이 같아야 한다 ([setup.md](setup.md) 2-3 방법 A).
+- Hailo 모델 변환(DFC)은 이 환경과 별도 (x86 Linux/WSL2, DFC가 요구하는 Python).
+- aarch64 + 3.13 전체 설치 확인은 [todo.md](todo.md)에 남김.
+
 ## DB 적용 기록
 Supabase에 마이그레이션을 적용하면 여기에 남긴다.
 
