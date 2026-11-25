@@ -56,3 +56,6 @@ Thumbs.db
 # ── Supabase CLI 로컬 파일 ──
 supabase/.temp/
 supabase/.branches/
+
+# ── Claude Code MCP 설정 (각자 PC에서 설정, 커밋 금지) ──
+.mcp.json

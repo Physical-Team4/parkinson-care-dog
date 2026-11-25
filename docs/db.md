@@ -103,4 +103,4 @@ SQLite 초안 대비: `pose_latest` 제거(→ Broadcast), `speakers` 제거(→
 대시보드는 `rpc('daily_stats', { p_days: 7 })` 한 번으로 받는다 (기록 없는 날도 채움, 형식은 [api.md](api.md)).
 
 ## 검증
-로컬 PostgreSQL 16에서 001~003 적용 + [db/test/checks.sql](../db/test/checks.sql)로 합침·재전송 중복·서버 규칙·메모 1회·복약 8개 제한·RLS(anon / 비회원 / care_team)·7일 집계를 확인함. 004(Realtime·pg_cron)는 Supabase에서만 확인 가능 → 첫 적용 때 확인.
+로컬 PostgreSQL 16에서 001~003 적용 + [db/test/checks.sql](../db/test/checks.sql)로 합침·재전송 중복·서버 규칙·메모 1회·복약 8개 제한·RLS(anon / 비회원 / care_team)·7일 집계를 확인함. 004(Realtime·pg_cron)와 Pi adapter(`supabase_rest.py`)는 로컬 Supabase(CLI 2.122.1, Postgres 17)에서 확인함: 알람 합치기·재전송, 배터리 트리거, 연결 끊김 cron, Broadcast 전송, settings 조회, anon 차단. 클라우드 프로젝트에는 첫 적용 때 한 번 더 확인.
