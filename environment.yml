@@ -24,6 +24,8 @@ dependencies:
   - requests
   - pyserial          # ESP32 USB 시리얼
   - smbus2            # X1200 잔량 칩 (I²C 0x36)
+  # ── 비전·이동 (A) ──
+  - opencv            # 마커 인식 cv2.aruco (OpenCV 4.7+ 본체). Pi aarch64 설치 확인 필요 (docs/todo.md)
   # ── 음성 입력 ──
   - portaudio
   - python-sounddevice
