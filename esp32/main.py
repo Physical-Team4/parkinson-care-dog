@@ -4,6 +4,7 @@ import utime
 import config
 from controllers.serial_cmd import SerialCommands, log
 from controllers.heartbeat import Heartbeat
+from drivers.eyes import Eyes
 from drivers.laser import Laser
 from drivers.mp3 import Mp3
 from services.gait import Gait
@@ -20,7 +21,8 @@ def main():
     gait = Gait()
     rhythm = Rhythm(laser, gait, mp3)
     medication = Medication()
-    touch = Touch()
+    eyes = Eyes()
+    touch = Touch(medication, mp3, eyes)
     serial = SerialCommands(hb, rhythm, medication)
 
     last_status = 0
