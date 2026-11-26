@@ -105,6 +105,7 @@ function draw(d, video) {
   const tm = d.timing || {};
   document.getElementById('timing').textContent = 'infer_ms' in tm ? `${tm.pre_ms} / ${tm.infer_ms} / ${tm.post_ms}` : '–';
   document.getElementById('n').textContent = d.people.length;
+  drawPersons(d.judge, W, H);
   drawMarkers(d.markers, W, H);
   const j = d.judge;
   if (j) {
@@ -120,6 +121,19 @@ function draw(d, video) {
           `${a.confidence != null ? ' conf ' + a.confidence.toFixed(2) : ''}` +
           `<div class="muted">${Object.entries(a.detail || {}).map(([k, v]) => k + '=' + v).join(' ')}</div></div>`).join('') + '</div>'
       : '';
+  }
+}
+
+function drawPersons(j, W, H) {
+  // 사람별 추적 번호·판정 상태 (bbox 아래쪽). ★ = 주목할 사람 (대시보드·F7 기준)
+  if (!j || !j.persons) return;
+  const LABEL = {none: '판정 불가', standing: '서 있음', sitting: '앉음', falling: '쓰러짐 의심', lying: '누움'};
+  ctx.font = 'bold 14px system-ui';
+  for (const p of j.persons) {
+    const [x1, , , y2] = p.bbox;
+    const txt = `${p.focus ? '★' : ''}P${p.id} ${LABEL[p.state] || p.state}${p.resting ? '·쉼' : ''}`;
+    ctx.fillStyle = p.state === 'falling' ? css('--mid') : p.state === 'lying' && !p.resting ? css('--low') : css('--box');
+    ctx.fillText(txt, x1*W + 4, Math.min(H - 4, y2*H + 16));
   }
 }
 
