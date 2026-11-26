@@ -88,4 +88,4 @@ Supabase에 마이그레이션을 적용하면 여기에 남긴다.
 
 | 날짜 | 파일 | 적용한 사람 | 비고 |
 |---|---|---|---|
-| | | | |
+| 2026-11-26 | 001~004 | D (Claude Code, Supabase MCP) | 클라우드 프로젝트 `pd-dog` (서울 ap-northeast-2, 무료 플랜) 새로 생성. 004는 Realtime 초기화(첫 클라이언트 접속) 뒤에 적용해야 `realtime.messages`가 있음. 테스트 계정 1개(care_team guardian)·테스트 데이터 있음 → [dashboard/progress.md](../dashboard/progress.md) |

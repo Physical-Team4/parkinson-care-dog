@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>PD-Dog 로그인</title>
+<link rel="icon" href="data:,">
 <style>
 :root{
   --bg:#f3f2ee; --panel:#fff; --panel-2:#f8f7f4; --ink:#1b2220; --muted:#6b7570;
@@ -38,26 +39,40 @@ button{font:inherit;cursor:pointer;border:1px solid var(--brand);border-radius:1
     <div class="logo" aria-hidden="true">🐕</div>
     <div>
       <h1>PD-Dog 돌봄 대시보드</h1>
-      <div class="muted">관리자 로그인</div>
+      <div class="muted">보호자·치료사 로그인</div>
     </div>
   </div>
   <div class="err" id="err" role="alert" hidden></div>
-  <form method="post" action="/login">
+  <form id="form">
     <div style="display:grid;gap:14px">
-      <label>아이디 <input name="username" autocomplete="username" required autofocus></label>
+      <label>이메일 <input name="email" type="email" autocomplete="username" required autofocus></label>
       <label>비밀번호 <input name="password" type="password" autocomplete="current-password" required></label>
-      <button type="submit">로그인</button>
+      <button type="submit" id="submit">로그인</button>
     </div>
   </form>
-  <div class="muted">비밀번호를 잊었으면 서버 컴퓨터에서 <code>python server.py --set-password</code> 로 새로 정하세요.</div>
+  <div class="muted">돌봄팀에 초대받은 계정만 들어올 수 있어요. 비밀번호를 잊었으면 관리자(D)에게 재설정을 요청하세요.</div>
 </main>
-<script>
-const MESSAGES = {
-  wrong: "아이디 또는 비밀번호가 맞지 않아요.",
-  locked: "여러 번 틀려서 1분 동안 로그인이 막혔어요. 잠시 뒤 다시 해 주세요.",
-};
-const e = new URLSearchParams(location.search).get("e");
-if (MESSAGES[e]){ const box = document.getElementById("err"); box.textContent = MESSAGES[e]; box.hidden = false; }
+<script src="/config.js"></script>
+<script type="module">
+import {createStore} from "/js/store.js";
+import {errorMessage} from "/js/model.js";
+const $ = id => document.getElementById(id);
+const showErr = text => { $("err").textContent = text; $("err").hidden = false; };
+const store = await createStore().catch(e => { showErr("로그인 기능을 불러오지 못했어요: " + errorMessage(e)); return null; });
+if (store && (store.mode === "mock" || await store.session().catch(() => null))) location.replace("/");
+$("form").addEventListener("submit", async ev => {
+  ev.preventDefault();
+  if (!store) return;
+  $("submit").disabled = true; $("err").hidden = true;
+  const f = new FormData($("form"));
+  try{
+    await store.signIn(String(f.get("email")).trim(), String(f.get("password")));
+    location.replace("/");
+  }catch(e){
+    showErr(/invalid login credentials/i.test(e.message || "") ? "이메일 또는 비밀번호가 맞지 않아요." : "로그인 실패: " + errorMessage(e));
+    $("submit").disabled = false;
+  }
+});
 </script>
 </body>
 </html>

@@ -16,10 +16,14 @@
 
 | 항목 | 현재 상태 | 담당 | 영향 |
 |---|---|---|---|
-| 포즈 Broadcast 메시지 수 | 24시간 0.4초 전송 시 월 약 650만 건 → 무료 한도 초과 가능. 시청 중일 때만 / 상태 변화 시만 보내기 중 선택 | A·D | [db.md](db.md#포즈-realtime-broadcast-검토-결과) |
+| 포즈 Broadcast 메시지 수 | 24시간 0.4초 전송 시 월 약 650만 건 → 무료 한도 초과 가능. **대시보드는 자세 보기를 열었을 때만 구독하도록 바꿈 (2026-11-26).** Pi(A)가 "보는 사람 있을 때만" 보내려면 Presence 정책(`realtime.messages` presence insert/select) 마이그레이션 필요 → A·D 합의 | A·D | [db.md](db.md#포즈-realtime-broadcast-검토-결과), dashboard/progress.md |
 | Supabase 요금제 | 무료 플랜은 1주 미사용 시 프로젝트 일시정지 가능, DB 500MB 등 → 시연 일정에 맞춰 확인 | D | 운영 |
 | 대시보드 로그인 방식 | Supabase Auth (이메일 초대 제안), 공개 가입 끄기 | D | RLS (`care_team`) |
-| 004 적용 확인 | 로컬 Supabase에서는 확인됨. 클라우드 첫 적용 때 pg_cron 확장 켜져 있는지 확인 | D | 첫 적용 때 |
+| 004 적용 확인 | 클라우드 `pd-dog`에 적용함 (2026-11-26). pg_cron 동작 확인(연결 끊김 알람 생성). 새 프로젝트는 Realtime이 첫 접속 뒤 초기화돼야 004가 성공 | D | 완료 |
+| 대시보드 → 로봇 명령 통로 | 리듬 큐잉 원격 시작/정지 통로 없음 (설정값만 DB로 전달). 대시보드는 인터페이스+Mock만 있음. 방식(명령 표 + Pi 조회 / Broadcast) 과 안전 조건 합의 필요 | B·C·D | F3, dashboard/progress.md |
+| Pi 대기열 상태 보고 | 대시보드에 "동기화 대기 N건"을 보이려면 Pi가 `outbox` 길이를 status에 보내야 함 (`robot_status`에 컬럼 추가 필요) | B·D | 오프라인 표시 |
+| 복약 요일·Pi 설정 반영 | `medication_schedule`에 요일 없음 (요청됨). 추가 시 Pi `fetch_settings`·ESP32 F1도 수정. Pi가 설정을 부팅 때만 가져옴 → 변경 반영 주기 결정 (B) | B·D | F1 |
+| Supabase 보안 점검 경고 | 트리거 함수 3개 `search_path` 미지정(경고), 유출 비밀번호 검사 꺼짐(Auth 설정). 나머지 경고는 설계상 의도 | D | 005 마이그레이션 후보 |
 | 화자 임베딩 저장 위치 | Supabase에 올리지 않음(Pi 로컬). SQLite는 대기열 전용이므로 파일(예: `~/pd-dog-data/speakers/`) 등 B가 결정 | B | F5 |
 | Pi 시계 | 대기열 알람은 Pi `occurred_at` 사용 → NTP 필수. 오프라인 부팅 시 Pi 5 RTC 배터리 필요 여부 | B | 알람 시각 |
 

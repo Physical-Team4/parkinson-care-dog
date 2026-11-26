@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>PD-Dog 돌봄 대시보드</title>
+<link rel="icon" href="data:,">
 <style>
 /* 외부 글꼴·라이브러리 없이 동작 (라즈베리파이가 인터넷 없이도 쓸 수 있게).
    색은 역할별로만: 초록=정상, 빨강=위급, 주황=주의·예시, 청록=브랜드, 파랑=그래프 한 줄. */
@@ -207,6 +208,17 @@ th{color:var(--muted);font-weight:600;font-size:12.5px}
 .st.new{background:var(--crit);color:#fff} .st.acknowledged{background:var(--ok-soft);color:var(--ok)}
 .sim{display:inline-block;margin-left:6px;border-radius:999px;padding:0 6px;font-size:11px;font-weight:700;border:1px dashed var(--brand);color:var(--brand)}
 #message{min-height:1.4em}
+/* 회의 반영 추가 요소 (기존 색·모양 재사용) */
+.s.miss{background:var(--crit-soft);color:var(--crit)}
+.subbox{display:grid;gap:8px;border-top:1px solid var(--line);padding-top:10px}
+.subbox .row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.result{font-size:13px;font-weight:700;border-radius:10px;padding:6px 10px}
+.result.ok{background:var(--ok-soft);color:var(--ok)} .result.err{background:var(--crit-soft);color:var(--crit)}
+.result.info{background:var(--panel-2);color:var(--ink-2)}
+.delay{display:inline-block;margin-left:6px;border-radius:999px;padding:0 6px;font-size:11px;font-weight:700;background:var(--warn-soft);color:var(--warn)}
+.merged{color:var(--muted);font-size:12px;margin-left:4px}
+.btn-main{background:var(--brand);color:#fff;border-color:var(--brand);font-weight:800}
+label.check{display:flex;gap:8px;align-items:center;font-size:13.5px}
 footer{font-size:12.5px;color:var(--muted);text-align:center;padding:8px 0 24px}
 </style>
 </head>
@@ -224,16 +236,18 @@ footer{font-size:12.5px;color:var(--muted);text-align:center;padding:8px 0 24px}
   <div class="chips">
     <a class="chip" href="/report">📄 치료사용 주간 리포트</a>
     <a class="chip" href="/settings">⚙️ 설정</a>
-    <span class="chip"><span class="dot" id="srvDot"></span><span id="srvText">서버 연결 중…</span></span>
+    <span class="chip"><span class="dot" id="srvDot"></span><span id="srvText">연결 확인 중…</span></span>
     <span class="chip"><span class="dot warn" id="robotDot"></span><span id="robotText">로봇 연결 전</span></span>
     <span class="chip num" id="clock">--:--</span>
-    <form method="post" action="/logout" style="display:contents"><button class="chip" type="submit">🚪 로그아웃</button></form>
+    <span class="chip" id="modeChip" hidden>🧪 Mock 모드 · 예시 데이터</span>
+    <button class="chip" type="button" id="logoutBtn">🚪 로그아웃</button>
   </div>
 </header>
 
 <div class="banner offline" id="offline" hidden role="alert">
-  ⚠ 서버 연결 끊김 — 지금은 알람을 받을 수 없어요. 서버(server.py)가 켜져 있는지 확인하세요.
+  ⚠ 인터넷(데이터베이스) 연결 끊김 — 지금은 새 알람을 받을 수 없어요. 아래는 <span id="offlineSince">마지막으로 받은</span> 내용이에요. 연결되면 자동으로 새로 받아요.
 </div>
+<div class="banner offline" id="careWarn" hidden role="alert"></div>
 <div class="banner sound" id="soundOff">
   <span>🔇 알람 소리가 꺼져 있어요. 위급 상황에 소리로 알림을 받으려면 켜 주세요.</span>
   <button id="soundBtn2">🔔 소리 켜기</button>
@@ -258,12 +272,12 @@ footer{font-size:12.5px;color:var(--muted);text-align:center;padding:8px 0 24px}
       <div class="tile"><div class="label">확인까지 평균</div><div class="value num" id="tResp">-</div></div>
       <div class="tile"><div class="label">마지막 알람</div><div class="value num" id="tLast" style="font-size:18px">-</div></div>
     </div>
-    <div class="muted">🔴 위급 = 낙상 · 위급 신고 · 무움직임 &nbsp; 🟠 주의 = 복약 미확인</div>
+    <div class="muted">🔴 위급 = 낙상 · 위급 신고 · 무움직임 &nbsp; 🟠 주의 = 복약 미확인 · 배터리 · 로봇 넘어짐 · 연결 끊김</div>
   </div>
 </section>
 
 <!-- 2. 시연 패널 (발표용) -->
-<details class="demo" id="demoPanel">
+<details class="demo" id="demoPanel" hidden>
   <summary>🎬 시연 패널 <span class="muted" style="font-weight:400">발표할 때 로봇 대신 신호를 보내 봐요 · 기록에 "시연"으로 표시돼요</span></summary>
   <div class="demo-buttons">
     <button data-source="camera" data-conf="0.91"><b>🧍 낙상 감지</b><span>F6 · 카메라가 쓰러진 자세 감지</span></button>
@@ -280,6 +294,12 @@ footer{font-size:12.5px;color:var(--muted);text-align:center;padding:8px 0 24px}
     <button id="vrLowBat"><b>🔋 배터리 부족</b><span>MechDog 배터리 15%</span></button>
     <button id="vrFar"><b>🚶 사용자가 멀어짐</b><span>따라오는 거리가 한도를 넘음</span></button>
     <button id="vrTip"><b>🐕 로봇 넘어짐</b><span>로봇 몸이 기울어짐</span></button>
+  </div>
+  <div class="muted" style="margin:4px 0 8px">📶 연결 시험 — 오프라인 대기열·재연결·명령 실패를 흉내 내요</div>
+  <div class="demo-buttons">
+    <button id="netRobot" aria-pressed="false"><b>📶 로봇 인터넷 끊기</b><span>알람은 로봇 안에 쌓였다가 재연결 때 전송</span></button>
+    <button id="netDash" aria-pressed="false"><b>🌐 대시보드 인터넷 끊기</b><span>마지막 데이터 유지 · 끊김 표시</span></button>
+    <button id="cmdFail" aria-pressed="false"><b>⚠️ 로봇 명령 실패 흉내</b><span>보행 시작/정지가 시간 초과로 실패</span></button>
   </div>
 </details>
 
@@ -308,7 +328,9 @@ footer{font-size:12.5px;color:var(--muted);text-align:center;padding:8px 0 24px}
 
     <!-- F6 자세 보기 (스틱맨) -->
     <article class="card fcard">
-      <div class="fhead"><div class="ficon">🦴</div><div><div class="fid">F6</div><h3>자세 보기 (영상 없음)</h3></div><span class="badge info" id="poseBadge">카메라 연결 전</span></div>
+      <div class="fhead"><div class="ficon">🦴</div><div><div class="fid">F6</div><h3>자세 보기 (영상 없음)</h3></div><span class="badge info" id="poseBadge">꺼짐</span></div>
+      <div class="row actions"><button id="poseBtn" class="btn-main" aria-pressed="false">▶ 자세 보기 시작</button>
+        <button id="poseRetry" hidden>🔄 다시 연결</button></div>
       <div class="pose-box" id="poseBox">
         <svg viewBox="0 0 200 200" id="poseSvg" role="img" aria-label="환자 자세 (관절 점)"></svg>
         <div style="display:grid;gap:6px">
@@ -317,7 +339,8 @@ footer{font-size:12.5px;color:var(--muted);text-align:center;padding:8px 0 24px}
           <div class="muted" id="poseAge"></div>
         </div>
       </div>
-      <div class="muted">카메라 영상 대신 AI가 찾은 <b>관절 점 17개</b>만 받아서 그려요. 얼굴이나 방 모습은 보이지 않아요.</div>
+      <div class="muted" id="poseConn">버튼을 눌렀을 때만 자세 신호를 받아요. 다른 탭·페이지로 가면 자동으로 멈추고, 5분이 지나도 멈춰요.</div>
+      <div class="muted">카메라 영상 대신 AI가 찾은 <b>관절 점 17개</b>만 받아서 그려요. 얼굴이나 방 모습은 보이지 않고, 아무것도 저장하지 않아요.</div>
     </article>
 
     <!-- F2 위급 신고 -->
@@ -336,9 +359,10 @@ footer{font-size:12.5px;color:var(--muted);text-align:center;padding:8px 0 24px}
 
     <!-- F1 복약 -->
     <article class="card fcard">
-      <div class="fhead"><div class="ficon">💊</div><div><div class="fid">F1</div><h3>복약 알림</h3></div><span class="badge demo">복용 여부 예시</span></div>
+      <div class="fhead"><div class="ficon">💊</div><div><div class="fid">F1</div><h3>복약 알림</h3></div><span class="badge info" id="medBadge">불러오는 중</span></div>
       <ul class="doses" id="doses"></ul>
-      <div class="muted">시간은 <a href="/settings">⚙️ 설정</a>에서 바꿔요. 로봇이 다가가 알려주고, 머리를 터치하면 복용 확인. <b>30분</b> 동안 확인이 없으면 보호자에게 알림이 가요.</div>
+      <div class="muted" id="medNote" hidden></div>
+      <div class="muted">알림 추가·수정·삭제는 <a href="/settings">⚙️ 설정</a>, 지난 기록은 <a href="/report">📄 리포트</a>에서 봐요. 로봇이 다가가 알려주고, 머리를 터치하면 복용 확인. <b>30분</b> 동안 확인이 없으면 보호자에게 알림이 가요.</div>
       <div class="live-line"><span>오늘 복약 미확인 알림 <span class="badge live" style="margin-left:4px">실시간</span></span><b class="num" id="sMed">0건</b></div>
     </article>
 
@@ -351,7 +375,14 @@ footer{font-size:12.5px;color:var(--muted);text-align:center;padding:8px 0 24px}
         <input type="range" id="bpm" min="80" max="110" step="1" value="96" aria-label="박자 (분당 걸음 수)">
         <button id="metroBtn" aria-pressed="false">▶ 박자 시작</button>
       </div>
-      <div class="muted">로봇이 앞장서 걸으며 박자음(🔊)과 바닥의 레이저 점(🔴)으로 걸음 박자를 알려줘요.</div>
+      <div class="muted">로봇이 앞장서 걸으며 박자음(🔊)과 바닥의 레이저 점(🔴)으로 걸음 박자를 알려줘요. 위 박자는 화면 미리보기예요.</div>
+      <div class="subbox">
+        <div class="fhead" style="gap:6px"><b style="font-size:14px">🐕 로봇 보행 (리듬 큐잉)</b><span class="badge info" id="rhythmBadge">-</span></div>
+        <div class="muted">목표 박자 <b id="targetBpm">-</b>보/분 · 따라오기 한도 <b id="targetFollow">-</b>cm <a href="/settings">(설정에서 변경)</a> · 로봇 지금: <b id="robotWalk">-</b></div>
+        <label class="check"><input type="checkbox" id="rhythmSafe"> 환자 곁에 보호자가 있고, 주변에 걸려 넘어질 물건이 없어요</label>
+        <div class="row"><button id="rhythmStart" class="btn-main">▶ 로봇 보행 시작</button><button id="rhythmStop">■ 정지</button></div>
+        <div class="result info" id="rhythmResult" aria-live="polite">-</div>
+      </div>
       <div style="display:grid;gap:6px;border-top:1px solid var(--line);padding-top:10px">
         <div class="fhead" style="gap:6px"><b style="font-size:14px">따라오는 거리 (ToF 센서)</b><span class="badge info" id="followBadge">로봇 연결 전</span></div>
         <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px">
@@ -362,12 +393,12 @@ footer{font-size:12.5px;color:var(--muted);text-align:center;padding:8px 0 24px}
         <svg class="spark" id="followSpark" viewBox="0 0 300 50" role="img" aria-label="최근 1분 따라오는 거리"></svg>
         <div class="muted" id="laserLine">레이저: -</div>
       </div>
-      <div class="live-line"><span>오늘 보행 훈련 <span class="badge demo" style="margin-left:4px">예시 데이터</span></span><b class="num" id="walkToday">-</b></div>
+      <div class="live-line"><span>오늘 보행 훈련 <span class="badge info" style="margin-left:4px" id="walkBadge">-</span></span><b class="num" id="walkToday">-</b></div>
     </article>
 
     <!-- F4 발성 훈련 (+F5) -->
     <article class="card fcard">
-      <div class="fhead"><div class="ficon">🗣️</div><div><div class="fid">F4 · F5</div><h3>발성 훈련 (크게 말하기)</h3></div><span class="badge demo">예시 데이터</span></div>
+      <div class="fhead"><div class="ficon">🗣️</div><div><div class="fid">F4 · F5</div><h3>발성 훈련 (크게 말하기)</h3></div><span class="badge info" id="voiceBadge">-</span></div>
       <div class="stats">
         <div class="stat"><div class="label">오늘 최고</div><div class="value num" id="vToday">-</div></div>
         <div class="stat"><div class="label">이번 주 목표</div><div class="value num" id="vTarget">-</div></div>
@@ -381,9 +412,11 @@ footer{font-size:12.5px;color:var(--muted);text-align:center;padding:8px 0 24px}
     <article class="card fcard">
       <div class="fhead"><div class="ficon">🤖</div><div><div class="fid">UART · 전원</div><h3>로봇 연결 · 배터리</h3></div><span class="badge info" id="robotBadge">로봇 연결 전</span></div>
       <ul class="conn">
-        <li><span class="dot" id="cPiDot"></span>라즈베리파이 (두뇌)<b id="cPi">-</b></li>
-        <li><span class="dot" id="cEspDot"></span>MechDog 몸 (ESP32 · USB 케이블)<b id="cEsp">-</b></li>
+        <li><span class="dot" id="cPiDot"></span>라즈베리파이 (두뇌 · 인터넷)<b id="cPi">-</b></li>
+        <li><span class="dot" id="cEspDot"></span>MechDog 몸 (ESP32 · USB 통신)<b id="cEsp">-</b></li>
         <li><span class="dot"></span>지금 모드<b id="cMode">-</b></li>
+        <li><span class="dot"></span>충전<b id="cCharge">-</b></li>
+        <li><span class="dot"></span>마지막 통신<b id="cLast">-</b></li>
       </ul>
       <div class="meter">
         <div class="row"><span>MechDog 배터리</span><b class="num" id="batDog">-</b></div>
@@ -395,6 +428,11 @@ footer{font-size:12.5px;color:var(--muted);text-align:center;padding:8px 0 24px}
       </div>
       <div class="alert-line warn" id="tempLine" hidden></div>
       <div class="muted" id="robotHint">로봇(라즈베리파이)이 상태를 보내면 여기에 실제 값이 나와요. 배터리가 20% 아래로 내려가면 🟠 주의 알람이 와요.</div>
+      <div class="subbox">
+        <div class="fhead" style="gap:6px"><b style="font-size:14px">🔄 데이터 동기화</b><span class="badge info" id="syncBadge">-</span></div>
+        <div class="muted" id="syncText">-</div>
+        <div class="muted">USB 통신·MechDog·ESP32는 라즈베리파이가 ESP32 신호를 3초 안에 받는지 하나로 판단해요 (따로 재지 않아요).</div>
+      </div>
     </article>
   </div>
 </section>
@@ -414,45 +452,47 @@ footer{font-size:12.5px;color:var(--muted);text-align:center;padding:8px 0 24px}
 <footer>PD-Dog는 치료를 대신하는 의료기기가 아니라, 집에서 재활 훈련을 이어가도록 돕는 보조 도구예요.</footer>
 </div>
 
+<script src="/config.js"></script>
 <script src="/demo-data.js"></script>
-<script>
-const POLL_MS = 1000;           // 1초마다 서버에 새 알람이 있는지 물어봐요
-const OFFLINE_AFTER_MS = 5000;  // 5초 동안 답이 없으면 "연결 끊김"
-const REQUEST_TIMEOUT_MS = 3000;
-// 신호 출처 → 화면 이름·등급. crit=위급(빨강·경보음), warn=주의(주황·짧은 알림음)
-const KIND = {
-  camera:            {name: "낙상 감지",            title: "낙상 감지!",   icon: "🧍", level: "crit"},
-  no_motion:         {name: "움직임 없음",          title: "움직임 없음!", icon: "⏸️", level: "crit"},
-  touch:             {name: "위급 신고 (터치)",     title: "위급 신고!",   icon: "🆘", level: "crit"},
-  voice:             {name: '위급 신고 ("도와줘")', title: "위급 신고!",   icon: "🆘", level: "crit"},
-  medication_missed: {name: "복약 미확인",          title: "복약 미확인",  icon: "💊", level: "warn"},
-  test:              {name: "테스트",               title: "테스트 알람",  icon: "🧪", level: "crit"},
-  low_battery:       {name: "배터리 부족",          title: "로봇 배터리 부족", icon: "🔋", level: "warn"},
-  robot_tipped:      {name: "로봇 넘어짐",          title: "로봇이 넘어졌어요", icon: "🐕", level: "warn"},
-};
+<script type="module">
+// Controller + View. 데이터는 store(Supabase 또는 Mock)에서만 받는다 → js/store.js
+import {createStore, requireLogin} from "/js/store.js";
+import * as M from "/js/model.js";
+
+const ALERT_POLL_MS = 5000;        // Realtime이 끊겨도 5초마다 확인 (같은 알람은 id로 합쳐서 중복 표시 없음)
+const ROBOT_POLL_MS = 2000;        // robot_latest 2~5초 조회 (docs/api.md)
+const SETTINGS_POLL_MS = 15000;    // 설정 화면에서 바꾼 값을 15초 안에 반영
+const MED_POLL_MS = 30000, STATS_POLL_MS = 60000;
+const OFFLINE_AFTER_MS = 12000;    // 이 시간 동안 조회가 한 번도 성공하지 않으면 "연결 끊김"
+const POSE_MAX_MS = 5 * 60000;     // 자세 보기 자동 종료 (데이터 사용량 줄이기)
+const POSE_STALE_MS = 5000;        // 자세 신호가 이 시간 없으면 "신호 없음"
+
+const store = await createStore();
+if (!await requireLogin(store)) await new Promise(() => {});   // 로그인 화면으로 이동 중
+const MOCK = store.mode === "mock";
+const {kind, fmtDuration, fmtAge, has} = M;
+
 const QUICK_NOTES = {   // 알람 종류별 빠른 메모
   crit:              ["직접 확인함, 이상 없음", "다친 곳 있음, 병원 연락", "로봇 오작동"],
   medication_missed: ["전화로 복용 확인함", "복용 시간 조정", "로봇 오작동"],
-  low_battery:       ["충전기 연결함", "곧 충전 예정"],
+  battery_low:       ["충전기 연결함", "곧 충전 예정"],
   robot_tipped:      ["로봇 다시 세움", "로봇 오작동"],
+  disconnected:      ["로봇 전원·와이파이 확인함", "일부러 끔"],
+  overheat:          ["쿨러·환기 확인함", "로봇 잠시 끔"],
 };
 const quickNotes = ev => QUICK_NOTES[ev.source] || QUICK_NOTES.crit;
 const STATUS_LABEL = {new: "미확인", acknowledged: "확인됨"};
 
 const $ = id => document.getElementById(id);
-let lastOk = 0, lastData = "", alarmLevel = null, soundOn = false, audioCtx = null;
+let lastData = "", alarmLevel = null, soundOn = false, audioCtx = null, everOk = false, wasOffline = false;
 const drafts = new Map();   // 알람별로 쓰던 메모 (화면이 다시 그려져도 지워지지 않게)
+const alertsById = new Map();
+let events = [];             // 화면 이벤트 (최신순, 중복 없음)
 
-const kind = s => KIND[s] || {name: s, title: "알람", icon: "⚠️", level: "crit"};
 const fmtDateTime = iso => iso ? new Date(iso).toLocaleString("ko-KR", {month:"numeric", day:"numeric", hour:"numeric", minute:"2-digit"}) : "-";
 const fmtTime = iso => iso ? new Date(iso).toLocaleTimeString("ko-KR", {hour:"numeric", minute:"2-digit"}) : "-";
 const fmtConf = c => c === null || c === undefined ? "" : ` · 신뢰도 ${Math.round(c * 100)}%`;
 const isToday = iso => new Date(iso).toDateString() === new Date().toDateString();
-function fmtDuration(ms){
-  if (ms == null || ms < 0) return "-";
-  const s = Math.round(ms / 1000);
-  return s < 60 ? `${s}초` : `${Math.floor(s / 60)}분 ${s % 60}초`;
-}
 function el(tag, text, className){
   const e = document.createElement(tag);
   if (text !== undefined) e.textContent = text;   // textContent만 써서 이상한 글자가 코드로 실행되지 않게
@@ -460,61 +500,75 @@ function el(tag, text, className){
   return e;
 }
 function setCount(id, n){ $(id).replaceChildren(String(n), el("small", "건")); }
+function setBadge(id, text, cls){ $(id).textContent = text; $(id).className = "badge " + cls; }
+const liveBadge = (id, hasData) => MOCK ? setBadge(id, "예시 데이터", "demo") : hasData ? setBadge(id, "실시간", "live") : setBadge(id, "데이터 없음", "info");
 
-async function api(method, path, body){
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), REQUEST_TIMEOUT_MS);
-  try{
-    const res = await fetch(path, {
-      method, cache: "no-store", signal: ctrl.signal,
-      headers: body ? {"Content-Type": "application/json"} : {},
-      body: body ? JSON.stringify(body) : undefined,
-    });
-    if (res.status === 401){ location.href = "/login"; throw new Error("로그인이 필요해요"); }
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(data.error || ("HTTP " + res.status));
-    return data;
-  } finally { clearTimeout(timer); }
-}
+/* ---------- 모드·로그인·돌봄팀 확인 ---------- */
+if (MOCK){ $("modeChip").hidden = false; $("demoPanel").hidden = false; $("logoutBtn").hidden = true; }
+$("logoutBtn").addEventListener("click", async () => { await store.signOut().catch(() => {}); location.href = "/login"; });
+store.isCareTeam().then(ok => {
+  if (ok) return;
+  $("careWarn").textContent = "⚠ 이 계정은 돌봄팀(care_team)에 등록되지 않아 데이터가 보이지 않아요. 관리자(D)에게 등록을 요청하세요.";
+  $("careWarn").hidden = false;
+}).catch(() => {});
 
 /* ---------- 실시간 알람 ---------- */
 async function refresh(){
   try{
-    const data = await api("GET", "/api/falls");
-    lastOk = Date.now();
-    const text = JSON.stringify(data);
-    if (text !== lastData){ lastData = text; render(data); }
+    const rows = await store.listAlerts();
+    everOk = true;
+    events = M.mergeAlerts(alertsById, rows);
+    draw();
   }catch(e){ /* 실패는 updateConnection()이 표시 */ }
   updateConnection();
 }
+function draw(){
+  const data = M.alertsView(events);
+  const text = JSON.stringify(data);
+  if (text !== lastData){ lastData = text; render(data); }
+}
+let alertsUnsub = null;
+function subscribeAlerts(){
+  if (alertsUnsub) alertsUnsub();
+  alertsUnsub = store.onAlertsChange(row => { events = M.mergeAlerts(alertsById, [row]); draw(); });
+}
+subscribeAlerts();
 
 function updateConnection(){
-  const offline = Date.now() - lastOk > OFFLINE_AFTER_MS;
-  $("offline").hidden = !offline;
-  $("srvDot").className = "dot " + (offline ? "crit" : "ok");
-  $("srvText").textContent = offline ? "서버 연결 끊김" : "서버 연결됨";
-  if (offline){
-    // 연결이 끊기면 예전 '정상' 표시를 믿으면 안 되므로 '알 수 없음'으로 바꿔요.
+  const offline = !everOk || !store.online || Date.now() - store.lastOkAt > OFFLINE_AFTER_MS;
+  const showOffline = offline && (everOk || Date.now() - started > 4000);
+  $("offline").hidden = !showOffline;
+  $("srvDot").className = "dot " + (offline ? (showOffline ? "crit" : "") : "ok");
+  $("srvText").textContent = !showOffline && offline ? "연결 확인 중…" : offline ? "인터넷 연결 끊김" : MOCK ? "Mock 데이터 연결됨" : "데이터베이스 연결됨";
+  if (showOffline){
+    $("offlineSince").textContent = store.lastOkAt ? `${fmtTime(new Date(store.lastOkAt).toISOString())}까지 받은` : "받은";
+    // 연결이 끊기면 예전 '정상' 표시를 믿으면 안 되므로 '알 수 없음'으로 바꿔요. 기록 표는 그대로 둬요.
     $("status").className = "card unknown";
     $("statusText").textContent = "❔ 상태 알 수 없음";
-    $("statusSub").textContent = "서버와 연결이 끊겨서 알람 여부를 확인할 수 없어요";
+    $("statusSub").textContent = "인터넷 연결이 끊겨서 새 알람 여부를 확인할 수 없어요";
     lastData = "";
   }
+  if (wasOffline && !offline) refreshAll("인터넷이 다시 연결돼서 최신 데이터를 받았어요.");
+  wasOffline = showOffline;
 }
+const started = Date.now();
+window.addEventListener("online", () => refreshAll());
 
 function renderActive(active){
   // 입력 중인 메모 칸이 있으면 지우지 않고 그대로 둬요.
   const focusedId = document.activeElement?.dataset?.memoFor;
   $("active").replaceChildren(...active.map(ev => {
     const k = kind(ev.source);
-    const box = el("div", undefined, "event" + (k.level === "warn" ? " warn" : ""));
+    const box = el("div", undefined, "event" + (ev.level === "warn" ? " warn" : ""));
     const head = el("div");
     const what = el("div", `${k.icon} ${k.name}`, "what");
+    if (ev.merged_count > 1) what.append(el("span", `×${ev.merged_count}`, "merged"));
     if (ev.simulated) what.append(el("span", "시연", "sim"));
+    if (ev.delayed_ms) what.append(el("span", `📶 늦게 도착 (+${fmtDuration(ev.delayed_ms)})`, "delay"));
     head.append(what, el("div", `${fmtDateTime(ev.created_at)}${fmtConf(ev.confidence)}`, "muted"));
 
     const input = el("input");
-    input.type = "text"; input.maxLength = 200; input.placeholder = "메모 (선택) · 어떻게 조치했는지 적어 두세요";
+    input.type = "text"; input.maxLength = M.LIMITS.NOTE_MAX; input.placeholder = "메모 (선택) · 어떻게 조치했는지 적어 두세요";
     input.dataset.memoFor = ev.id;
     input.value = drafts.get(ev.id) || "";
     input.addEventListener("input", () => drafts.set(ev.id, input.value));
@@ -537,15 +591,15 @@ function renderActive(active){
 }
 
 function render(data){
-  const events = data.events;
-  const active = events.filter(e => e.status === "new");
-  const hasCrit = active.some(e => kind(e.source).level === "crit");
+  const evs = data.events;
+  const active = evs.filter(e => e.status === "new");
+  const hasCrit = active.some(e => e.level === "crit");
   alarmLevel = active.length ? (hasCrit ? "crit" : "warn") : null;
 
   $("status").className = "card " + (alarmLevel === "crit" ? "alarm" : alarmLevel === "warn" ? "warn" : "ok");
   $("statusText").textContent = !alarmLevel ? "✅ 정상"
     : active.length === 1 ? `${alarmLevel === "crit" ? "🚨" : "⚠️"} ${kind(active[0].source).title}`
-    : `🚨 확인할 알람 ${active.length}건`;
+    : `${alarmLevel === "crit" ? "🚨" : "⚠️"} 확인할 알람 ${active.length}건`;
   $("statusSub").textContent = !alarmLevel ? "확인이 필요한 알람이 없어요"
     : alarmLevel === "crit" ? "환자 상태를 직접 확인한 뒤 \"확인\"을 눌러 주세요"
     : active.every(e => e.source === "medication_missed") ? "약을 드셨는지 확인한 뒤 \"확인\"을 눌러 주세요"
@@ -554,17 +608,17 @@ function render(data){
   renderActive(active);
 
   // 오늘 요약 (최근 기록 기준)
-  const today = events.filter(e => isToday(e.created_at));
+  const today = evs.filter(e => isToday(e.created_at));
   setCount("tToday", today.length);
   setCount("tOpen", data.unacknowledged);
   const acked = today.filter(e => e.acknowledged_at);
   const avg = acked.length ? acked.reduce((s, e) => s + (new Date(e.acknowledged_at) - new Date(e.created_at)), 0) / acked.length : null;
   $("tResp").textContent = fmtDuration(avg);
-  $("tLast").textContent = events.length ? `${fmtTime(events[0].created_at)} ${kind(events[0].source).name}` : "-";
+  $("tLast").textContent = evs.length ? `${fmtTime(evs[0].created_at)} ${kind(evs[0].source).name}` : "-";
 
   // 기능 카드 (실시간 부분)
   const count = src => today.filter(e => e.source === src).length;
-  const lastOf = srcs => { const e = events.find(e => srcs.includes(e.source)); return e ? fmtDateTime(e.created_at) : "-"; };
+  const lastOf = srcs => { const e = evs.find(e => srcs.includes(e.source)); return e ? fmtDateTime(e.created_at) : "-"; };
   setCount("sFall", count("camera"));
   setCount("sNoMotion", count("no_motion"));
   $("sFallLast").textContent = lastOf(["camera", "no_motion"]);
@@ -574,42 +628,46 @@ function render(data){
   $("sMed").textContent = count("medication_missed") + "건";
 
   // 기록 표
-  $("history").replaceChildren(...events.map(ev => {
+  $("history").replaceChildren(...evs.map(ev => {
     const k = kind(ev.source);
     const tr = el("tr");
     const kindTd = el("td", `${k.icon} ${k.name}`);
+    if (ev.merged_count > 1) kindTd.append(el("span", `×${ev.merged_count}`, "merged"));
     if (ev.simulated) kindTd.append(el("span", "시연", "sim"));
+    if (ev.delayed_ms){
+      const d = el("span", "📶 늦게 도착", "delay");
+      d.title = `로봇이 오프라인일 때 발생 → ${fmtDateTime(ev.received_at)}에 도착`;
+      kindTd.append(d);
+    }
     const st = el("td"); st.append(el("span", STATUS_LABEL[ev.status] || ev.status, "st " + ev.status));
     const took = ev.acknowledged_at ? fmtDuration(new Date(ev.acknowledged_at) - new Date(ev.created_at)) : "-";
     tr.append(el("td", fmtDateTime(ev.created_at)), kindTd, st, el("td", took), el("td", ev.note || "", "memo"));
     return tr;
   }));
-  $("emptyHistory").hidden = events.length > 0;
+  $("emptyHistory").hidden = evs.length > 0;
 }
 
 async function acknowledge(id, btn, note){
   btn.disabled = true;
   try{
-    await api("POST", `/api/falls/${id}/ack`, note.trim() ? {note: note.trim()} : undefined);
+    const done = await store.ackAlert(id, note.trim());
     drafts.delete(id);
-    $("message").textContent = note.trim() ? "확인 처리하고 메모를 남겼어요." : "확인 처리했어요.";
+    $("message").textContent = !done ? "이미 다른 보호자가 확인한 알람이에요." : note.trim() ? "확인 처리하고 메모를 남겼어요." : "확인 처리했어요.";
   }catch(e){
     btn.disabled = false;
-    $("message").textContent = "확인 처리에 실패했어요: " + e.message;
+    $("message").textContent = "확인 처리에 실패했어요: " + M.errorMessage(e);
   }
   refresh();
 }
 
-// 시연 패널: 로봇 대신 신호 보내기 (기록에 "시연"으로 남아요)
-document.querySelectorAll("#demoPanel [data-source]").forEach(b => b.addEventListener("click", async () => {
-  const body = {source: b.dataset.source, simulated: true};
-  if (b.dataset.conf) body.confidence = Number(b.dataset.conf);
-  try{
-    const r = await api("POST", "/api/falls", body);
-    $("message").textContent = r.duplicate
-      ? `이미 확인 안 된 "${kind(body.source).name}" 알람이 있어서 새로 만들지 않았어요 (30초 중복 방지).`
-      : `시연: "${kind(body.source).name}" 신호를 보냈어요.`;
-  }catch(e){ $("message").textContent = "신호 전송 실패: " + e.message; }
+// 시연 패널 (Mock 전용): 로봇 대신 신호 보내기 (기록에 "시연"으로 남아요)
+document.querySelectorAll("#demoPanel [data-source]").forEach(b => b.addEventListener("click", () => {
+  if (!MOCK) return;
+  const source = b.dataset.source, conf = b.dataset.conf ? Number(b.dataset.conf) : null;
+  const r = store.demo.raiseAlert(source, conf);
+  $("message").textContent = r.queued ? `로봇 인터넷이 끊겨 "${kind(source).name}" 알람이 로봇 안 대기열에 쌓였어요 (${store.demo.queued}건).`
+    : r.merged ? `30초 안에 같은 "${kind(source).name}" 알람이 있어서 하나로 합쳤어요 (중복 방지).`
+    : `시연: "${kind(source).name}" 신호를 보냈어요.`;
   refresh();
   window.scrollTo({top: 0, behavior: "smooth"});
 }));
@@ -643,7 +701,7 @@ setInterval(() => {   // 위급: 매초 '삐-뽀', 주의: 3초마다 짧은 '�
   else if (soundTick++ % 3 === 0){ beep(740, t, 0.15, 0.1, "sine"); }
 }, 1000);
 
-/* ---------- F3 레이저 박자 미리보기 ---------- */
+/* ---------- F3 레이저 박자 미리보기 (화면에서만) ---------- */
 const STEPS = 8;
 const floor = $("floor");
 const laser = el("div", undefined, "laser");
@@ -686,79 +744,105 @@ $("metroBtn").addEventListener("click", async () => {
   $("metroBtn").setAttribute("aria-pressed", String(!!metroTimer));
 });
 
-/* ---------- 설정 (치료사·보호자가 /settings 에서 정한 값) ---------- */
-const D = window.PD_DEMO, W7 = D.week;
+/* ---------- 설정 (치료사·보호자가 /settings 에서 정한 값 → 로봇이 가져감) ---------- */
 let settings = null;
 async function loadSettings(){
   let s;
-  try{ s = await api("GET", "/api/settings"); }
-  catch(e){ if (settings) return; s = {doses: D.doses, walk_bpm: 96, voice_target_db: W7.voiceTarget, follow_max_cm: 150}; }
+  try{ s = await store.getSettings(); }catch(e){ return; }
   if (JSON.stringify(s) === JSON.stringify(settings)) return;
   settings = s;
-  renderDoses();
-  renderVoiceChart(s.voice_target_db);
-  $("followMax").textContent = s.follow_max_cm;
-  if (!metroTimer){ $("bpm").value = s.walk_bpm; $("bpmVal").textContent = s.walk_bpm; }
+  $("followMax").textContent = s.follow_limit_cm;
+  $("targetBpm").textContent = s.target_bpm;
+  $("targetFollow").textContent = s.follow_limit_cm;
+  if (!metroTimer){ $("bpm").value = s.target_bpm; $("bpmVal").textContent = s.target_bpm; }
+  renderVoice();
+  updateRhythm();
 }
 
-function renderDoses(){   // 일정은 설정값. 복용 여부는 로봇 연결 전이라 지금 시각 기준 예시예요.
-  const now = new Date();
-  $("doses").replaceChildren(...settings.doses.map(([hm, label]) => {
-    const [h, m] = hm.split(":").map(Number);
-    const at = new Date(now); at.setHours(h, m, 0, 0);
-    const diffMin = (now - at) / 60000;
-    const taken = new Date(at.getTime() + 3 * 60000).toLocaleTimeString("ko-KR", {hour:"2-digit", minute:"2-digit", hour12:false});
-    const [cls, text] = diffMin >= 30 ? ["done", `✓ 복용 확인 ${taken}`] : diffMin >= 0 ? ["now", "⏰ 알림 중"] : ["later", "예정"];
+/* ---------- F1 복약: 일정(medication_schedule) + 오늘 기록(medication_logs) ---------- */
+async function loadMedication(){
+  let schedule, logs;
+  try{
+    const start = new Date(); start.setHours(0, 0, 0, 0);
+    [schedule, logs] = await Promise.all([store.listSchedule(), store.medicationLogs(start.toISOString())]);
+  }catch(e){ return; }
+  const rows = M.medicationToday(schedule, logs);
+  liveBadge("medBadge", true);
+  $("doses").replaceChildren(...rows.map(r => {
+    const [cls, text] = M.DOSE_STATUS[r.status];
+    const label = r.status === "confirmed" && r.confirmed_at
+      ? `${text} ${new Date(r.confirmed_at).toLocaleTimeString("ko-KR", {hour: "2-digit", minute: "2-digit", hour12: false})}${r.method === "voice" ? " (음성)" : ""}` : text;
     const li = el("li");
-    li.append(el("span", hm, "t num"), el("span", label, "name"), el("span", text, "s " + cls));
+    li.append(el("span", r.time, "t num"), el("span", r.name || "(이름 없음)", "name"), el("span", label, "s " + cls));
+    if (!r.enabled) li.style.opacity = ".55";
     return li;
   }));
+  const noLogs = !MOCK && !logs.length && rows.some(r => r.status === "nolog");
+  $("medNote").hidden = !noLogs;
+  $("medNote").textContent = "로봇이 아직 오늘 복약 기록을 보내지 않았어요. 기록이 오면 복용 확인·미확인이 표시돼요.";
 }
-$("walkToday").textContent = `${W7.walkSessions.at(-1)}회 · ${W7.walkMinutes.at(-1)}분 · 평균 ${W7.walkBpm.at(-1)}보/분`;
-$("vId").textContent = D.voiceId.successRate + "%";
 
-function renderVoiceChart(target){   // F4: 최근 7일 하루 최고 dB(예시) + 목표선(설정값). 한 줄이라 범례 없이 제목으로 설명
-  const values = W7.voiceDb;
+/* ---------- 7일 기록 (rpc daily_stats): 보행 · 발성 · 인식률 ---------- */
+let daily = null;
+async function loadStats(){
+  try{ daily = M.dailyView(await store.dailyStats(7)); }catch(e){ return; }
+  const i = daily.days.length - 1;
+  const walk = daily.walkSessions[i];
+  liveBadge("walkBadge", M.anyValue(daily.walkSessions));
+  $("walkToday").textContent = walk ? `${walk}회 · ${daily.walkMinutes[i]}분${has(daily.walkBpm[i]) ? ` · 평균 ${daily.walkBpm[i]}보/분` : ""}` : "기록 없음";
+  const rate = [...daily.speakerRate].reverse().find(has);
+  $("vId").textContent = has(rate) ? rate + "%" : "데이터 없음";
+  renderVoice();
+}
+
+function renderVoice(){   // F4: 최근 7일 하루 최고 dB + 목표선(설정값). 값이 없는 날은 점을 찍지 않아요
+  if (!daily || !settings) return;
+  const target = settings.target_db;
+  const values = daily.voiceDb.map(v => has(v) ? Math.round(v * 10) / 10 : null);
+  const known = values.filter(has);
+  liveBadge("voiceBadge", known.length > 0);
   const box = $("voiceChart");
   box.replaceChildren(el("div", "최근 7일 · 하루 최고 목소리 크기 (dB)", "muted"));
-  const labels = values.map((_, i) => {
-    if (i === values.length - 1) return "오늘";
-    const d = new Date(); d.setDate(d.getDate() - (values.length - 1 - i));
-    return `${d.getMonth() + 1}/${d.getDate()}`;
-  });
-  $("vToday").replaceChildren(String(values.at(-1)), el("small", "dB"));
+  const labels = daily.days.map((d, i) => i === values.length - 1 ? "오늘" : `${Number(d.slice(5, 7))}/${Number(d.slice(8, 10))}`);
+  const last = values.at(-1);
+  $("vToday").replaceChildren(has(last) ? String(last) : "-", el("small", has(last) ? "dB" : ""));
   $("vTarget").replaceChildren(String(target), el("small", "dB"));
-  $("vHit").replaceChildren(String(values.filter(v => v >= target).length), el("small", "/7일"));
+  $("vHit").replaceChildren(String(known.filter(v => v >= target).length), el("small", `/${known.length || 7}일`));
+  if (!known.length){ box.append(el("div", "아직 발성 훈련 기록이 없어요. 로봇과 훈련하면 여기에 그려져요.", "note")); return; }
 
-  const W = 320, H = 150, L = 30, R = 18, T = 12, B = 22, lo = 55, hi = 75;
+  const lo = Math.min(55, Math.floor(Math.min(...known, target) - 3)), hi = Math.max(75, Math.ceil(Math.max(...known, target) + 3));
+  const W = 320, H = 150, L = 30, R = 18, T = 12, B = 22;
   const x = i => L + i * (W - L - R) / (values.length - 1);
   const y = v => T + (hi - v) * (H - T - B) / (hi - lo);
   const NS = "http://www.w3.org/2000/svg";
   const svg = document.createElementNS(NS, "svg");
   svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
   svg.setAttribute("role", "img");
-  svg.setAttribute("aria-label", "최근 7일 하루 최고 목소리 크기: " + values.map((v, i) => `${labels[i]} ${v}dB`).join(", ") + `. 목표 ${target}dB`);
+  svg.setAttribute("aria-label", "최근 7일 하루 최고 목소리 크기: " + values.map((v, i) => `${labels[i]} ${has(v) ? v + "dB" : "기록 없음"}`).join(", ") + `. 목표 ${target}dB`);
   const add = (tag, attrs, text) => {
     const n = document.createElementNS(NS, tag);
     for (const k in attrs) n.setAttribute(k, attrs[k]);
     if (text) n.textContent = text;
     svg.append(n); return n;
   };
-  [55, 65, 75].forEach(v => {
+  [lo, Math.round((lo + hi) / 2), hi].forEach(v => {
     add("line", {x1: L, x2: W - R, y1: y(v), y2: y(v), class: "grid-line"});
     add("text", {x: L - 6, y: y(v) + 4, "text-anchor": "end", class: "axis-text"}, String(v));
   });
   add("line", {x1: L, x2: W - R, y1: y(target), y2: y(target), class: "target"});
   add("text", {x: L + 4, y: y(target) - 5, "text-anchor": "start", class: "target-text"}, `목표 ${target}dB`);
-  add("polyline", {points: values.map((v, i) => `${x(i)},${y(v)}`).join(" "), class: "series"});
+  let seg = [];   // 기록 없는 날에서 선을 끊어요
+  const flush = () => { if (seg.length > 1) add("polyline", {points: seg.join(" "), class: "series"}); seg = []; };
+  values.forEach((v, i) => has(v) ? seg.push(`${x(i)},${y(v)}`) : flush()); flush();
   const tip = el("div", undefined, "tooltip"); tip.hidden = true;
   values.forEach((v, i) => {
-    add("circle", {cx: x(i), cy: y(v), r: 4.5, class: "pt"});
     add("text", {x: x(i), y: H - 6, "text-anchor": "middle", class: "axis-text"}, labels[i]);
+    if (!has(v)) return;
+    add("circle", {cx: x(i), cy: y(v), r: 4.5, class: "pt"});
     const hit = add("rect", {x: x(i) - 18, y: T, width: 36, height: H - T - B, class: "hit", tabindex: 0});
     const show = () => {
       const scale = svg.getBoundingClientRect().width / W;
-      tip.textContent = `${labels[i]} · ${v}dB ${v >= target ? "(목표 달성)" : `(목표까지 ${target - v}dB)`}`;
+      tip.textContent = `${labels[i]} · ${v}dB ${v >= target ? "(목표 달성)" : `(목표까지 ${Math.round((target - v) * 10) / 10}dB)`}`;
       tip.style.left = (x(i) * scale) + "px";
       tip.style.top = (y(v) * scale + box.querySelector(".muted").offsetHeight) + "px";
       tip.hidden = false;
@@ -769,63 +853,71 @@ function renderVoiceChart(target){   // F4: 최근 7일 하루 최고 dB(예시)
   box.append(svg, tip);
 }
 
-/* ---------- 로봇 연결 · 배터리 · 따라오기 거리 (라즈베리파이가 보낸 상태) ---------- */
-const MODE_LABEL = {idle: "대기", walking: "보행 훈련 중", voice: "발성 훈련 중", medication: "복약 알림 중",
-                    approaching: "환자에게 가는 중", charging: "충전 중"};
-const followHist = [];   // [받은 시각, cm] 최근 60초
-const fmtAge = s => s < 2 ? "방금" : s < 60 ? `${Math.round(s)}초 전` : `${Math.round(s / 60)}분 전`;
+/* ---------- 로봇 연결 · 배터리 · 따라오기 거리 · 동기화 (robot_latest) ---------- */
+let robot = {status: null, online: false, age_seconds: null};
+let followRows = [];
 const setDot = (id, cls) => $(id).className = "dot " + (cls || "");
-function setBadge(id, text, cls){ $(id).textContent = text; $(id).className = "badge " + cls; }
-function sourceBadge(id, data, offText){   // 실시간 / 시연 / 연결 끊김 / 연결 전
-  const v = data && (data.status || data.pose);
-  if (!v) return setBadge(id, offText, "info");
-  if (!data.online) return setBadge(id, "연결 끊김", "demo");
-  setBadge(id, v.simulated ? "시연" : "실시간", v.simulated ? "demo" : "live");
-}
-function meter(valId, barId, pct, extra){
+const DOT = {ok: "ok", off: "crit", unknown: "", never: "warn"};
+function meter(valId, barId, cell, extra){
+  const pct = cell[0] === "value" ? cell[1] : null;
   $(barId).style.width = (pct ?? 0) + "%";
   $(barId).classList.toggle("low", pct != null && pct < 20);
-  $(valId).textContent = pct == null ? "-" : Math.round(pct) + "%" + (extra || "");
+  $(valId).textContent = pct == null ? cell[1] : pct + "%" + (extra || "");
 }
 
 async function refreshRobot(){
-  let r;
-  try{ r = await api("GET", "/api/robot"); }catch(e){ return; }
-  const s = r.status, online = r.online;
-  setDot("robotDot", !s ? "warn" : online ? "ok" : "crit");
-  $("robotText").textContent = !s ? "로봇 연결 전" : !online ? "로봇 연결 끊김" : s.simulated ? "가상 로봇 연결됨" : "로봇 연결됨";
-  sourceBadge("robotBadge", r, "로봇 연결 전");
-  renderFollow(s, online);
-  if (!s) return;
+  let latest = robot.status, ok = true;
+  try{ latest = await store.robotLatest(); }catch(e){ ok = false; }
+  const prev = robot.online;
+  robot = M.robotView(latest, Date.now(), ok);
+  if (prev === false && robot.online === true) refreshAll("로봇이 다시 연결돼서 그동안 쌓인 기록을 새로 받았어요.");
+  if (ok){ try{ followRows = await store.followHistory(Date.now() - 60000); }catch(e){ /* 그래프만 그대로 */ } }
+  renderRobot();
+}
 
-  setDot("cPiDot", online ? "ok" : "crit");
-  $("cPi").textContent = online ? `응답 중 · ${fmtAge(r.age_seconds)}` : `끊김 · 마지막 신호 ${fmtAge(r.age_seconds)}`;
-  setDot("cEspDot", !online ? "" : s.esp32_ok ? "ok" : "crit");
-  $("cEsp").textContent = !online ? "알 수 없음" : s.esp32_ok ? "응답 중" : "응답 없음";
-  $("cMode").textContent = online ? (MODE_LABEL[s.mode] || "-") : "-";
-  meter("batDog", "batDogBar", s.dog_battery_pct);
-  meter("batPi", "batPiBar", s.pi_battery_pct, s.pi_charging ? " · 충전 중 ⚡" : "");
-  if (s.pi_battery_pct == null) $("batPi").textContent = "측정 안 됨 (X1200을 쓰면 표시)";
-  const hot = online && s.pi_temp_c != null && s.pi_temp_c >= 75;   // 평소엔 숨기고 뜨거울 때만 알려요
+function renderRobot(){
+  const s = robot.status, on = robot.online, c = M.connectionRows(robot);
+  setDot("robotDot", !s ? "warn" : on === true ? "ok" : on === null ? "" : "crit");
+  $("robotText").textContent = !s ? "로봇 연결 전" : on === null ? "로봇 상태 확인 불가" : !on ? "로봇 연결 끊김" : MOCK ? "가상 로봇 연결됨" : "로봇 연결됨";
+  if (!s) setBadge("robotBadge", "로봇 연결 전", "info");
+  else if (on === null) setBadge("robotBadge", "확인 불가", "info");
+  else if (!on) setBadge("robotBadge", "연결 끊김", "demo");
+  else setBadge("robotBadge", MOCK ? "예시 (가상 로봇)" : "실시간", MOCK ? "demo" : "live");
+
+  setDot("cPiDot", DOT[c.pi[0]]); $("cPi").textContent = c.pi[1];
+  setDot("cEspDot", DOT[c.esp[0]]); $("cEsp").textContent = c.esp[1];
+  $("cMode").textContent = c.mode;
+  $("cCharge").textContent = c.charging[1];
+  $("cLast").textContent = s ? `${new Date(s.received_at).toLocaleTimeString("ko-KR")} (${fmtAge(robot.age_seconds)})` : "기록 없음";
+  meter("batDog", "batDogBar", c.dogBattery);
+  meter("batPi", "batPiBar", c.piBattery);
+  const hot = on && s && has(s.pi_temp_c) && s.pi_temp_c >= 75;   // 평소엔 숨기고 뜨거울 때만 알려요
   $("tempLine").hidden = !hot;
   if (hot){
     $("tempLine").className = "alert-line " + (s.pi_temp_c >= 80 ? "crit" : "warn");
     $("tempLine").textContent = `🌡️ 라즈베리파이 ${Math.round(s.pi_temp_c)}°C — 과열 주의, 쿨러를 확인하세요`;
   }
-  $("robotHint").textContent = online
-    ? "배터리가 20% 아래로 내려가면 🟠 주의 알람이 와요."
+  $("robotHint").textContent = !s ? "로봇(라즈베리파이)이 상태를 보내면 여기에 실제 값이 나와요."
+    : on ? "배터리가 20% 아래로 내려가면 🟠 주의 알람이 와요."
     : "⚠ 로봇 신호가 10초 넘게 없어요. 이때는 로봇의 알림을 받을 수 없어요. 라즈베리파이 전원과 와이파이를 확인하세요.";
+
+  const sync = M.syncView({dashboardOnline: store.online && everOk, robot, events, nowMs: Date.now()});
+  const SYNC_BADGE = {synced: ["정상", "live"], robot_offline: ["로봇 오프라인", "demo"], dashboard_offline: ["대시보드 오프라인", "demo"], never: ["신호 없음", "info"]};
+  setBadge("syncBadge", ...SYNC_BADGE[sync.state]);
+  $("syncText").textContent = `${sync.title} — ${sync.detail}` + (s ? ` 마지막 로봇 데이터: ${new Date(s.received_at).toLocaleString("ko-KR")}.` : "");
+  renderFollow(s, on === true);
+  updateRhythm();
 }
 
 function renderFollow(s, online){
-  const max = settings ? settings.follow_max_cm : 150;
+  const max = settings ? settings.follow_limit_cm : 150;
   const cm = s && online ? s.follow_distance_cm : null;
   if (!s) setBadge("followBadge", "로봇 연결 전", "info");
   else if (!online) setBadge("followBadge", "연결 끊김", "demo");
-  else if (cm == null) setBadge("followBadge", "측정 안 하는 중", "info");
-  else setBadge("followBadge", s.simulated ? "시연" : "실시간", s.simulated ? "demo" : "live");
+  else if (!has(cm)) setBadge("followBadge", "측정 안 하는 중", "info");
+  else setBadge("followBadge", MOCK ? "예시 (가상 로봇)" : "실시간", MOCK ? "demo" : "live");
   $("followLimit").style.left = `calc(${Math.min(100, max / 3)}% - 1px)`;
-  if (cm == null){
+  if (!has(cm)){
     $("followVal").textContent = "-"; $("followFill").style.width = "0"; $("followState").textContent = "";
   } else {
     const far = cm > max;
@@ -833,12 +925,10 @@ function renderFollow(s, online){
     $("followFill").style.width = Math.min(100, cm / 3) + "%";
     $("followFill").classList.toggle("far", far);
     $("followState").textContent = far ? "🟠 멀어져서 로봇이 기다리는 중 ·" : "✓ 잘 따라오는 중 ·";
-    followHist.push([Date.now(), cm]);
   }
-  while (followHist.length && Date.now() - followHist[0][0] > 60000) followHist.shift();
   drawSpark(max);
   $("laserLine").textContent = !(s && online) ? "레이저: -"
-    : `레이저: ${s.laser_on ? "🔴 켜짐" : "꺼짐"}${s.bpm ? ` · 박자 ${Math.round(s.bpm)}보/분` : ""}`;
+    : `레이저: ${s.laser_on === true ? "🔴 켜짐" : s.laser_on === false ? "꺼짐" : "데이터 없음 (미연결)"}${s.bpm ? ` · 박자 ${Math.round(s.bpm)}보/분` : ""}`;
 }
 
 function drawSpark(max){   // 최근 1분 따라오는 거리 (한 줄) + 한도 점선
@@ -846,35 +936,119 @@ function drawSpark(max){   // 최근 1분 따라오는 거리 (한 줄) + 한도
   const y = v => 46 - Math.min(v, 300) / 300 * 42;
   const line = (attrs) => { const n = document.createElementNS(NS, attrs.tag); delete attrs.tag; for (const k in attrs) n.setAttribute(k, attrs[k]); return n; };
   const nodes = [line({tag: "line", x1: 0, x2: 300, y1: y(max), y2: y(max), class: "limitline"})];
-  if (followHist.length > 1)
+  const pts = followRows.filter(r => has(r.follow_distance_cm));
+  if (pts.length > 1)
     nodes.push(line({tag: "polyline", class: "line",
-      points: followHist.map(([t, v]) => `${300 - (now - t) / 60000 * 300},${y(v)}`).join(" ")}));
+      points: pts.map(r => `${Math.max(0, 300 - (now - Date.parse(r.received_at)) / 60000 * 300)},${y(r.follow_distance_cm)}`).join(" ")}));
   svg.replaceChildren(...nodes);
 }
 
-/* ---------- F6 자세 보기: 관절 점 17개로 스틱맨 그리기 (영상 없음) ---------- */
+/* ---------- F3 로봇 보행 명령 (store.sendRhythmCommand). 통로가 없으면 "미연동" ---------- */
+let rhythmBusy = false;
+function rhythmResult(text, cls){ $("rhythmResult").textContent = text; $("rhythmResult").className = "result " + cls; }
+function updateRhythm(){
+  const can = store.capabilities.rhythmCommands;
+  setBadge("rhythmBadge", can ? (MOCK ? "Mock 명령" : "연동됨") : "원격 명령 미연동", can ? (MOCK ? "demo" : "live") : "info");
+  const s = robot.status;
+  $("robotWalk").textContent = robot.online !== true || !s ? "연결 안 됨"
+    : s.mode === "walking" ? `보행 중${s.bpm ? ` · ${s.bpm}보/분` : ""}` : (M.MODE_LABEL[s.mode] || "데이터 없음");
+  const block = settings ? M.rhythmStartBlock(robot, settings.target_bpm) : "설정을 불러오는 중이에요";
+  $("rhythmStart").disabled = rhythmBusy || !can || !!block || !$("rhythmSafe").checked;
+  $("rhythmStop").disabled = rhythmBusy || !can;
+  $("rhythmSafe").disabled = !can;
+  if (rhythmBusy) return;
+  if (!can){ rhythmResult(M.COMMAND_ERROR.not_connected + " 목표 박자·거리 한도는 설정 저장 시 로봇에 전달돼요.", "info"); return; }
+  if ($("rhythmResult").dataset.sticky) return;   // 방금 보낸 결과는 잠시 유지
+  rhythmResult(block ? "시작할 수 없어요: " + block : !$("rhythmSafe").checked ? "안전 확인에 체크하면 시작할 수 있어요." : "보낼 준비가 됐어요.", block ? "err" : "info");
+}
+async function sendRhythm(cmd){
+  rhythmBusy = true; updateRhythm();
+  rhythmResult(cmd === "start" ? "로봇에 보행 시작을 보내는 중…" : "로봇에 정지를 보내는 중…", "info");
+  let r;
+  try{ r = await store.sendRhythmCommand(cmd, {bpm: settings?.target_bpm}); }
+  catch(e){ r = {ok: false, error: M.isNetworkError(e) ? "network" : "rejected"}; }
+  rhythmBusy = false;
+  $("rhythmResult").dataset.sticky = "1";
+  setTimeout(() => { delete $("rhythmResult").dataset.sticky; updateRhythm(); }, 6000);
+  if (r.ok) rhythmResult(cmd === "start" ? `✓ 전달 성공 — 로봇이 ${settings.target_bpm}보/분으로 보행을 시작해요.` : "✓ 전달 성공 — 로봇이 멈춰요.", "ok");
+  else rhythmResult("✗ 전달 실패 — " + (M.COMMAND_ERROR[r.error] || r.error), "err");
+  updateRhythm();
+  refreshRobot();
+}
+$("rhythmSafe").addEventListener("change", updateRhythm);
+$("rhythmStart").addEventListener("click", () => sendRhythm("start"));
+$("rhythmStop").addEventListener("click", () => sendRhythm("stop"));
+
+/* ---------- F6 자세 보기: 열었을 때만 구독 (영상 없음, 관절 점 17개) ---------- */
 const BONES = [[5,6],[5,7],[7,9],[6,8],[8,10],[5,11],[6,12],[11,12],[11,13],[13,15],[12,14],[14,16],[0,5],[0,6]];
 const POSE_LABEL = {none: ["사람이 안 보여요", "muted"], standing: ["서 있음", "ok"], sitting: ["앉아 있음", "ok"],
                     falling: ["넘어지는 중!", "crit"], lying: ["바닥에 누워 있음", "crit"]};
-let lastPose = "";
-async function refreshPose(){
-  let p;
-  try{ p = await api("GET", "/api/robot/pose"); }catch(e){ return; }
-  sourceBadge("poseBadge", p, "카메라 연결 전");
-  $("poseAge").textContent = p.pose ? (p.online ? `업데이트 ${fmtAge(p.age_seconds)}` : `마지막 신호 ${fmtAge(p.age_seconds)}`) : "";
-  const pose = p.pose && p.online ? p.pose : null;
-  const key = JSON.stringify(pose);
-  if (key === lastPose) return;
-  lastPose = key;
-  const [label, cls] = pose ? POSE_LABEL[pose.state] : ["-", "muted"];
+const POSE_STATE = {   // 상태 → [배지, 배지 색, 설명]
+  off:        ["꺼짐", "info", "버튼을 눌렀을 때만 자세 신호를 받아요. 다른 탭·페이지로 가면 자동으로 멈추고, 5분이 지나도 멈춰요."],
+  connecting: ["연결 중", "info", "자세 신호에 연결하는 중이에요…"],
+  waiting:    ["신호 기다리는 중", "info", "연결됐어요. 로봇이 자세를 보내기를 기다리는 중이에요."],
+  live:       ["실시간", "live", "자세 신호를 받고 있어요."],
+  stale:      ["신호 없음", "demo", "몇 초 동안 자세 신호가 없어요. 로봇 카메라가 꺼졌거나 사람이 안 보일 수 있어요."],
+  error:      ["연결 실패", "demo", "자세 신호에 연결하지 못했어요. 인터넷을 확인하고 \"다시 연결\"을 눌러 주세요."],
+  paused:     ["일시 멈춤", "info", "다른 탭을 보는 동안 멈췄어요. 돌아오면 다시 받아요."],
+  timeout:    ["꺼짐", "info", "5분이 지나서 자세 보기를 멈췄어요 (데이터 절약). 다시 보려면 시작을 눌러 주세요."],
+};
+let poseSub = null, poseState = "off", poseTimer = null, lastPoseAt = 0, pausedByHide = false;
+function setPoseState(st){
+  poseState = st;
+  const [badge, cls, text] = POSE_STATE[st];
+  setBadge("poseBadge", st === "live" && MOCK ? "예시 (가상 로봇)" : badge, st === "live" && MOCK ? "demo" : cls);
+  $("poseConn").textContent = text;
+  const on = !!poseSub;
+  $("poseBtn").textContent = on ? "■ 자세 보기 멈춤" : "▶ 자세 보기 시작";
+  $("poseBtn").setAttribute("aria-pressed", String(on));
+  $("poseRetry").hidden = !(st === "error" || st === "stale");
+}
+function startPose(){
+  if (poseSub) return;
+  pausedByHide = false; lastPoseAt = 0;
+  poseSub = store.subscribePose({
+    onPose: p => { lastPoseAt = Date.now(); drawPose(p); if (poseState !== "live") setPoseState("live"); },
+    onState: st => {
+      if (!poseSub) return;
+      if (st === "SUBSCRIBED") setPoseState("waiting");
+      else if (["CHANNEL_ERROR", "TIMED_OUT", "CLOSED"].includes(st)){ stopPose("error"); }
+    },
+  });
+  clearTimeout(poseTimer);
+  poseTimer = setTimeout(() => stopPose("timeout"), POSE_MAX_MS);
+  setPoseState("connecting");
+}
+function stopPose(nextState = "off"){
+  // 먼저 비워야 해요: 채널을 닫으면 Supabase가 곧바로 "CLOSED"를 알려 오는데, 그때 다시 stopPose가 불리지 않게
+  const sub = poseSub; poseSub = null;
+  if (sub) sub.close();
+  clearTimeout(poseTimer);
+  drawPose(null);
+  setPoseState(nextState);
+}
+$("poseBtn").addEventListener("click", () => poseSub ? stopPose("off") : startPose());
+$("poseRetry").addEventListener("click", () => { stopPose("off"); startPose(); });
+document.addEventListener("visibilitychange", () => {   // 백그라운드에서는 받지 않아요
+  if (document.hidden && poseSub){ stopPose("paused"); pausedByHide = true; }
+  else if (!document.hidden && pausedByHide) startPose();
+});
+window.addEventListener("pagehide", () => stopPose("off"));   // 다른 페이지로 이동
+setInterval(() => {
+  if (poseSub && poseState === "live" && Date.now() - lastPoseAt > POSE_STALE_MS){ setPoseState("stale"); drawPose(null); }
+  if (poseState === "live") $("poseAge").textContent = `업데이트 ${fmtAge((Date.now() - lastPoseAt) / 1000)}`;
+}, 1000);
+
+function drawPose(pose){
+  if (!pose) $("poseAge").textContent = "";
+  const [label, cls] = pose ? (POSE_LABEL[pose.state] || ["-", "muted"]) : ["-", "muted"];
   $("poseState").textContent = label;
   $("poseState").className = "pose-state " + cls;
   $("poseBox").classList.toggle("danger", cls === "crit");
-
   const NS = "http://www.w3.org/2000/svg", svg = $("poseSvg");
   const mk = (tag, attrs) => { const n = document.createElementNS(NS, tag); for (const k in attrs) n.setAttribute(k, attrs[k]); return n; };
   const nodes = [mk("line", {x1: 10, x2: 190, y1: 184, y2: 184, class: "floorline"})];
-  const pts = pose ? pose.keypoints : [];
+  const pts = pose && Array.isArray(pose.keypoints) ? pose.keypoints : [];
   const ok = i => pts[i] && pts[i][2] >= 0.3;   // 신뢰도 낮은 점은 그리지 않아요
   const P = i => [pts[i][0] * 200, pts[i][1] * 200];
   BONES.forEach(([a, b]) => { if (ok(a) && ok(b)) nodes.push(mk("line", {x1: P(a)[0], y1: P(a)[1], x2: P(b)[0], y2: P(b)[1], class: "bone"})); });
@@ -882,18 +1056,17 @@ async function refreshPose(){
   if (ok(0)) nodes.push(mk("circle", {cx: P(0)[0], cy: P(0)[1], r: 10, class: "head"}));
   if (!pose) nodes.push(mk("text", {x: 100, y: 100, "text-anchor": "middle", fill: "currentColor", "font-size": 12, opacity: .6}));
   svg.replaceChildren(...nodes);
-  if (!pose) svg.lastChild.textContent = "카메라 신호 없음";
+  if (!pose) svg.lastChild.textContent = poseSub ? "자세 신호 기다리는 중" : "자세 보기 꺼짐";
 }
 
-/* ---------- 🤖 가상 로봇 (시연용): 진짜 로봇이 보낼 신호를 흉내 내요 ---------- */
+/* ---------- 🤖 가상 로봇 (Mock 시연용): 진짜 로봇이 보낼 신호를 흉내 내요 ---------- */
 const STAND = [[.50,.12],[.52,.10],[.48,.10],[.54,.11],[.46,.11],[.58,.24],[.42,.24],[.61,.38],[.39,.38],[.62,.50],[.38,.50],
                [.55,.52],[.45,.52],[.56,.70],[.44,.70],[.56,.88],[.44,.88]];
 const LIE = STAND.map(([x, y]) => [0.12 + (y - 0.08) * 0.9, 0.80 + (x - 0.5) * 0.6]);   // 옆으로 누운 자세
 const clamp01 = v => Math.min(1, Math.max(0, v));
 const vr = {timers: [], battery: 64, piBattery: 78, lowBatUntil: 0, farUntil: 0, tip: false, fallStart: 0};
-const post = (path, body) => api("POST", path, body).catch(() => {});
 
-function vrPose(){
+function vrPose(){   // 보는 사람이 있을 때만 Mock이 전달해요 (store.demo.pushPose)
   const now = Date.now();
   let state = "standing", pts;
   if (vr.fallStart){
@@ -903,18 +1076,18 @@ function vrPose(){
   } else {
     pts = STAND.map(([x, y], i) => [x + 0.012 * Math.sin(now / 500 + (i > 12 ? Math.PI : 0)), y]);   // 걷는 듯 살짝 흔들림
   }
-  post("/api/robot/pose", {state, simulated: true, keypoints: pts.map(([x, y]) => [clamp01(x), clamp01(y), 0.9])});
+  store.demo.pushPose({state, keypoints: pts.map(([x, y]) => [clamp01(x), clamp01(y), 0.9])});
 }
 function vrStatus(){
-  const now = Date.now(), max = settings ? settings.follow_max_cm : 150;
+  const now = Date.now(), max = settings ? settings.follow_limit_cm : 150;
   vr.battery = Math.max(25, vr.battery - 0.05);
   vr.piBattery = Math.max(25, vr.piBattery - 0.03);
   const follow = now < vr.farUntil ? max + 60 + 15 * Math.sin(now / 700) : Math.min(max - 15, 95 + 30 * Math.sin(now / 4000));
-  post("/api/robot/status", {
-    esp32_ok: true, simulated: true, mode: vr.fallStart ? "approaching" : "walking",
+  store.demo.pushStatus({
+    esp32_ok: true, mode: vr.fallStart ? "approaching" : "idle",
     dog_battery_pct: now < vr.lowBatUntil ? 15 : Math.round(vr.battery), pi_battery_pct: Math.round(vr.piBattery), pi_charging: false,
     pi_temp_c: 52 + 3 * Math.sin(now / 9000), follow_distance_cm: vr.fallStart ? null : Math.round(follow),
-    laser_on: !vr.fallStart, bpm: settings ? settings.walk_bpm : 96, robot_tipped: vr.tip,
+    laser_on: !vr.fallStart, bpm: null, robot_tipped: vr.tip,
   });
   vr.tip = false;
 }
@@ -923,33 +1096,68 @@ function vrSet(on){
   if (on){ vrStatus(); vrPose(); vr.timers = [setInterval(vrStatus, 2000), setInterval(vrPose, 400)]; }
   $("vrToggle").firstChild.textContent = on ? "🤖 가상 로봇 끄기" : "🤖 가상 로봇 켜기";
   $("vrToggle").setAttribute("aria-pressed", String(on));
-  $("message").textContent = on ? "가상 로봇을 켰어요. 아래 카드들이 '시연' 값으로 움직여요."
+  $("message").textContent = on ? "가상 로봇을 켰어요. 아래 카드들이 '예시' 값으로 움직여요. 자세는 \"자세 보기 시작\"을 눌러야 받아요."
                                 : "가상 로봇을 껐어요. 10초 뒤 '로봇 연결 끊김'으로 바뀌어요.";
+  refreshRobot();
 }
-const vrOn = () => vr.timers.length > 0;
-const vrEnsure = () => { if (!vrOn()) vrSet(true); };
-$("vrToggle").addEventListener("click", () => vrSet(!vrOn()));
-$("vrFall").addEventListener("click", () => {
-  vrEnsure();
-  vr.fallStart = Date.now();
-  $("message").textContent = "시연: 스틱맨이 넘어져요. 곧 낙상 알람이 와요.";
-  setTimeout(() => post("/api/falls", {source: "camera", confidence: 0.92, simulated: true}).then(refresh), 2200);
-  setTimeout(() => { vr.fallStart = 0; }, 12000);   // 12초 뒤 다시 일어나요
-});
-$("vrLowBat").addEventListener("click", () => { vrEnsure(); vr.lowBatUntil = Date.now() + 15000; vrStatus(); setTimeout(refresh, 300);
-  $("message").textContent = "시연: MechDog 배터리가 15%로 떨어졌어요."; });
-$("vrFar").addEventListener("click", () => { vrEnsure(); vr.farUntil = Date.now() + 10000;
-  $("message").textContent = "시연: 사용자가 멀어져서 로봇이 기다려요 (10초)."; });
-$("vrTip").addEventListener("click", () => { vrEnsure(); vr.tip = true; vrStatus(); setTimeout(refresh, 300);
-  $("message").textContent = "시연: 로봇 몸이 넘어졌어요."; });
+if (MOCK){
+  const vrOn = () => vr.timers.length > 0;
+  const vrEnsure = () => { if (!vrOn()) vrSet(true); };
+  const toggle = (id, on, onText, offText) => { $(id).firstChild.textContent = on ? onText : offText; $(id).setAttribute("aria-pressed", String(on)); };
+  $("vrToggle").addEventListener("click", () => vrSet(!vrOn()));
+  $("vrFall").addEventListener("click", () => {
+    vrEnsure();
+    vr.fallStart = Date.now();
+    $("message").textContent = "시연: 스틱맨이 넘어져요. 곧 낙상 알람이 와요.";
+    setTimeout(() => { store.demo.raiseAlert("camera", 0.92); refresh(); }, 2200);
+    setTimeout(() => { vr.fallStart = 0; }, 12000);   // 12초 뒤 다시 일어나요
+  });
+  $("vrLowBat").addEventListener("click", () => { vrEnsure(); vr.lowBatUntil = Date.now() + 15000; vrStatus(); setTimeout(refresh, 300);
+    $("message").textContent = "시연: MechDog 배터리가 15%로 떨어졌어요."; });
+  $("vrFar").addEventListener("click", () => { vrEnsure(); vr.farUntil = Date.now() + 10000;
+    $("message").textContent = "시연: 사용자가 멀어져서 로봇이 기다려요 (10초)."; });
+  $("vrTip").addEventListener("click", () => { vrEnsure(); vr.tip = true; vrStatus(); setTimeout(refresh, 300);
+    $("message").textContent = "시연: 로봇 몸이 넘어졌어요."; });
+  $("netRobot").addEventListener("click", () => {
+    const on = !store.demo.robotNet;
+    const sent = store.demo.setRobotNet(on);
+    toggle("netRobot", !on, "📶 로봇 인터넷 다시 연결", "📶 로봇 인터넷 끊기");
+    $("message").textContent = on ? `로봇 인터넷을 다시 연결했어요. 대기열 알람 ${sent}건을 보냈어요 (발생 시각 유지 → "늦게 도착" 표시).`
+                                  : "로봇 인터넷을 끊었어요. 10초 뒤 '로봇 연결 끊김', 그동안 알람은 로봇 안에 쌓여요.";
+    refresh(); refreshRobot();
+  });
+  $("netDash").addEventListener("click", () => {
+    const on = !store.demo.dashboardNet;
+    store.demo.setDashboardNet(on);
+    toggle("netDash", !on, "🌐 대시보드 인터넷 다시 연결", "🌐 대시보드 인터넷 끊기");
+    $("message").textContent = on ? "대시보드 인터넷을 다시 연결했어요." : "대시보드 인터넷을 끊었어요. 화면은 마지막 데이터를 유지해요.";
+    refresh(); refreshRobot();
+  });
+  $("cmdFail").addEventListener("click", () => {
+    const on = !store.commandFail;
+    store.demo.setCommandFail(on ? "timeout" : null);
+    toggle("cmdFail", on, "⚠️ 로봇 명령 정상으로", "⚠️ 로봇 명령 실패 흉내");
+    $("message").textContent = on ? "이제 로봇 보행 명령이 '시간 초과'로 실패해요." : "로봇 명령이 다시 정상으로 처리돼요.";
+  });
+}
 
 /* ---------- 시계 + 주기 조회 ---------- */
+async function refreshAll(msg){
+  await Promise.all([refresh(), loadSettings(), loadMedication(), loadStats()]);
+  subscribeAlerts();
+  if (msg) $("message").textContent = msg;
+}
 const tickClock = () => $("clock").textContent = new Date().toLocaleTimeString("ko-KR", {hour:"numeric", minute:"2-digit"});
 tickClock(); setInterval(tickClock, 1000);
-loadSettings(); setInterval(loadSettings, 15000);   // 설정 화면에서 바꾼 값을 15초 안에 반영
-(async function loop(){ await Promise.all([refresh(), refreshRobot()]); setTimeout(loop, POLL_MS); })();
-(async function poseLoop(){ await refreshPose(); setTimeout(poseLoop, 400); })();
+await loadSettings();
+loadMedication(); loadStats();
+setInterval(loadSettings, SETTINGS_POLL_MS);
+setInterval(() => { if (!document.hidden) loadMedication(); }, MED_POLL_MS);
+setInterval(() => { if (!document.hidden) loadStats(); }, STATS_POLL_MS);
+(async function loop(){ await refresh(); setTimeout(loop, ALERT_POLL_MS); })();     // 알람은 탭이 뒤에 있어도 확인 (경보음)
+(async function robotLoop(){ await refreshRobot(); setTimeout(robotLoop, ROBOT_POLL_MS); })();
 setInterval(updateConnection, 1000);
+setPoseState("off"); drawPose(null);
 </script>
 </body>
 </html>
