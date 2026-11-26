@@ -54,6 +54,7 @@
 | `robot_tipped` 임계값 | IMU `read_angle()` 기울기(X·Y)로 판단. M0 `sonar_imu_test.py`로 측정 후 `esp32/config.py` | C·D | 넘어짐, 이동 안전 정지 |
 | `move()` 범위 밖 각도 | 위키 범위 -30~30, 원본 코드는 ±40·±50 사용 → 잘림/오류 확인 (M0) | A·C | 걷기 값 |
 | E-FPDS (넘어진 사람 데이터셋) | 바닥에 쓰러짐 vs 쓰러지지 않음(소파·침대에 누움 포함) 2클래스, 6,982장. 공식 페이지에 라이선스 없음 → 저자 문의 후 사용. 제공 가중치는 YOLOv3 → YOLOv8 재학습 + DFC 변환 필요. pose 모델이 누운 사람을 잘 못 잡을 때 검토 | A | F6 보조 모델 |
+| 가구 검출 확인 | `MZ_VERSION=v2.20.0 bash pi/scripts/download_models.sh yolov8s` → `python -m pi.scripts.furniture_check --inspect`(출력 형식 확인) → `--seconds 20`을 로봇 위치·각도별로. 사람이 person(0)으로 잡히는지로 종류 번호 확인. 결과로 본격 구현 여부 결정. pose와 같이 쓰려면 VDevice 공유 필요 | A | F6 "발견 시 이미 누움" |
 | 가구 검출 (bed·couch) | 눕는 과정을 못 본 경우 바닥/소파 구분용 COCO 검출 모델(hailo8l yolov8s). 낮은 카메라 시점에서 인식되는지 확인 필요 | A | F6 |
 | 여러 사람이 보일 때 | 구현됨 (사람별 추적·F6, 2명 이상이면 F7 멈춤). 남은 것: 겹침·엇갈림 때 번호 뒤바뀜 실측, 대시보드에 여러 명 표시가 필요하면 api.md 변경(D와 협의). 환자 본인 구분(얼굴 등)은 하지 않음 | A·D | F6·F7 |
 | 비전 루프 main.py 연결 | `VisionMonitor`를 카메라·Hailo와 메인 루프에 연결, 0.4초 포즈 전송. `main.py`는 B 담당 → 먼저 알리고 진행 | A·B | F6·F7 동작 |

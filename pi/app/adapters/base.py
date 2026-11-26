@@ -94,6 +94,25 @@ class MarkerDetector(Protocol):
         ...
 
 
+@dataclass(frozen=True)
+class Detection:
+    """일반 물체 검출 1개 (COCO). bbox는 원본 프레임 기준 0~1 (x1, y1, x2, y2)."""
+    class_id: int
+    name: str
+    score: float
+    bbox: tuple[float, float, float, float]
+
+
+class ObjectDetector(Protocol):
+    """카메라 프레임 → COCO 물체 (adapters/hailo_detect.py, mock). 가구(침대·소파) 확인용."""
+
+    def detect(self, frame: np.ndarray) -> list[Detection]:
+        """RGB (H, W, 3) uint8. frame은 보관하지 않는다."""
+        ...
+
+    def close(self) -> None: ...
+
+
 class Microphone(Protocol):
     sample_rate: int
 

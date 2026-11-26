@@ -7,7 +7,7 @@ from typing import Any
 
 import numpy as np
 
-from pi.app.adapters.base import MarkerObs, PersonPose, RemoteError
+from pi.app.adapters.base import Detection, MarkerObs, PersonPose, RemoteError
 from pi.app.views import serial_messages as sm
 from pi.app.views.api_schemas import Op
 
@@ -109,6 +109,24 @@ class MockMarkerDetector:
         r = self.results[min(self.calls, len(self.results) - 1)]
         self.calls += 1
         return r
+
+
+class MockObjectDetector:
+    """정해 둔 물체 검출 결과를 차례로 돌려준다. 기본은 아무것도 없음."""
+
+    def __init__(self, results: list[list[Detection]] | None = None) -> None:
+        self.results = results or [[]]
+        self.calls = 0
+        self.last_ms = 0.0
+        self.closed = False
+
+    def detect(self, frame: np.ndarray) -> list[Detection]:
+        r = self.results[min(self.calls, len(self.results) - 1)]
+        self.calls += 1
+        return r
+
+    def close(self) -> None:
+        self.closed = True
 
 
 class MockMicrophone:
