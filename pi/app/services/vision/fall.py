@@ -17,6 +17,11 @@
   단, 일어서서 엉덩이가 기준보다 높아지면 settle_s를 기다리지 않고 바로 기준을 올린다
   (요에서 일어나자마자 쓰러지는 경우를 "스스로 눕기"로 놓치지 않도록).
 - resting(쉬는 중) = 엉덩이 그대로 스스로 누웠거나, 기억상 쉬던 사람이 계속 누워 있음 → F7이 잠으로 본다.
+- 취침 선언 (set_sleep_mode, "잘게" 음성·대시보드에서 controller가 호출):
+    declared(선언함) → 누우면 asleep(잠듦) → **서 있는 모습이 보이면 해제** (자다 깨서 일어났다 쓰러지면 평소처럼 판단)
+    declared·asleep 동안: 빠른 낙상(descent)은 그대로 알람. 느린 하강으로 눕기·과정 못 본 누움은 잠(resting)으로 본다.
+    declared 후 sleep_declared_timeout_s 안에 눕지 않으면 취소.
+- 이불 단서: 과정을 못 본 누움에서 상체는 보이는데 무릎·발목이 계속 안 보이면(이불 덮음) lying_only 대기를 늘린다.
 - 판정 불가 프레임(어깨·엉덩이가 안 보임)은 lost_tolerance_s 동안 직전 상태를 유지하고, 넘으면 "none".
 - 알람 후에는 일어서거나 앉은 상태가 rearm_upright_s 이어져야 다음 알람이 가능 (같은 낙상으로 반복 알람 안 함).
 알려진 한계 (실측으로 확인할 것, docs/todo.md):
@@ -58,6 +63,9 @@ class FallConfig:
     conf_slow: float
     conf_lying_only: float
     rearm_upright_s: float
+    lying_only_covered_s: float | None
+    covered_min_ratio: float
+    sleep_declared_timeout_s: float
 
     @classmethod
     def from_settings(cls, s) -> FallConfig:
@@ -73,6 +81,8 @@ class FallConfig:
             conf_unseen_standing=s.fall_conf_unseen_standing, conf_descent=s.fall_conf_descent,
             conf_slow=s.fall_conf_slow, conf_lying_only=s.fall_conf_lying_only,
             rearm_upright_s=s.fall_rearm_upright_s,
+            lying_only_covered_s=s.fall_lying_only_covered_s, covered_min_ratio=s.fall_covered_min_ratio,
+            sleep_declared_timeout_s=s.sleep_declared_timeout_s,
         )
 
 
@@ -146,6 +156,19 @@ class FallDetector:
         self._last_seen: _Seen | None = None
         self._last_f: PoseFeatures | None = None
         self._unseen_from: str | None = None                # 이번 누움을 못 봤을 때, 기억상 마지막 상태
+        self._lying_n = 0
+        self._covered_n = 0                                 # 누운 프레임 중 하체(무릎·발목)가 안 보인 수
+        # 취침 선언: None / "declared" / "asleep"
+        self._sleep: str | None = None
+        self._sleep_since = 0.0
+
+    def set_sleep_mode(self, on: bool, now: float) -> None:
+        """취침 선언("잘게")·해제. 일어서는 모습이 보이면 자동 해제된다."""
+        self._sleep, self._sleep_since = ("declared", now) if on else (None, now)
+
+    @property
+    def sleep_mode(self) -> str | None:
+        return self._sleep
 
     @property
     def resting(self) -> bool:
@@ -193,6 +216,7 @@ class FallDetector:
 
     def _start_lying(self, now: float) -> None:
         self._lying_since, self._lying_conf, self._max_torso = now, [], 0.0
+        self._lying_n = self._covered_n = 0
         self._seg_posture = "lying"
         seen = (self._ref is not None and self._last_upright_s is not None
                 and now - self._last_upright_s <= self.cfg.onset_max_gap_s)
@@ -219,6 +243,8 @@ class FallDetector:
 
     def update(self, f: PoseFeatures | None, now: float) -> FallUpdate:
         cfg = self.cfg
+        if self._sleep == "declared" and now - self._sleep_since > cfg.sleep_declared_timeout_s:
+            self._sleep = None      # 선언 후 오래 눕지 않음 → 취소
         if self._falling_since is not None and now - self._falling_since > cfg.confirm_window_s:
             self._falling_since = None   # 확정 못 하고 시간 지남 → 취소
 
@@ -239,6 +265,11 @@ class FallDetector:
                 if self._lying_since is None:
                     self._start_lying(now)
                 self._lying_conf.append(f.core_conf)
+                self._lying_n += 1
+                if not f.visible[[13, 14, 15, 16]].any():   # 무릎·발목 모두 안 보임 (상체는 판정 가능)
+                    self._covered_n += 1
+                if self._sleep == "declared":
+                    self._sleep = "asleep"
                 self._max_torso = max(self._max_torso, f.torso_deg)
                 if self._onset_ref is not None:
                     drop = (f.hip_y - self._onset_ref.hip_y) / self._onset_ref.torso_len
@@ -247,6 +278,8 @@ class FallDetector:
             else:
                 self._lying_since = None
                 self._resting = False
+                if self._sleep == "asleep" and posture == "standing":
+                    self._sleep = None      # 일어남 → 취침 모드 해제
                 self._track_upright(f, posture, now)
                 if self._upright_since is None:
                     self._upright_since = now
@@ -282,6 +315,9 @@ class FallDetector:
                                   **({"hip_drop": round(self._hip_drop, 2)} if ref else {}), **detail})
             self._falling_since = None   # 소파·침대에 털썩 눕기: 머리는 빨리 내려갔지만 엉덩이 높이 그대로 → 취소
         if ref is not None:   # 눕는 과정을 봄 → 엉덩이 하강으로 판단 (작으면 스스로 눕기, 알람 없음)
+            if self._sleep is not None and lying_s >= cfg.slow_confirm_s:
+                self._resting = True   # 취침 선언 후 눕기 → 요에 눕는 동작으로 봄 (빠른 낙상은 위에서 이미 처리)
+                return None
             if self._hip_drop >= cfg.slow_hip_drop_ratio and lying_s >= cfg.slow_confirm_s:
                 return FallAlarm("slow_fall", min(1.0, cfg.conf_slow * mean_conf), self._onset_s,
                                  {"path": "slow_fall", "hip_drop": round(self._hip_drop, 2),
@@ -289,12 +325,18 @@ class FallDetector:
             if self._hip_drop < cfg.slow_hip_drop_ratio and lying_s >= cfg.slow_confirm_s:
                 self._resting = True   # 엉덩이 그대로 스스로 누움 → 쉬는 중
             return None
-        if self._resting:      # 기억상 쉬던 사람이 계속 누워 있음
+        if self._sleep is not None:   # 취침 선언 후 과정을 못 본 누움 → 잠
+            self._resting = True
+        if self._resting:      # 기억상 쉬던 사람이 계속 누워 있음 / 잠
             return None
         if self._unseen_from == "standing" and lying_s >= cfg.unseen_after_standing_s:
             return FallAlarm("lying_only", min(1.0, cfg.conf_unseen_standing * mean_conf), ls,
                              {"path": "lying_only", "last_seen": "standing", **detail})
-        if cfg.lying_only_s is not None and lying_s >= cfg.lying_only_s:
+        covered = (cfg.lying_only_covered_s is not None and self._lying_n > 0
+                   and self._covered_n / self._lying_n >= cfg.covered_min_ratio)
+        wait = cfg.lying_only_covered_s if covered else cfg.lying_only_s
+        if wait is not None and lying_s >= wait:
             return FallAlarm("lying_only", min(1.0, cfg.conf_lying_only * mean_conf), ls,
-                             {"path": "lying_only", "last_seen": self._unseen_from or "unknown", **detail})
+                             {"path": "lying_only", "last_seen": self._unseen_from or "unknown",
+                              "covered": covered, **detail})
         return None

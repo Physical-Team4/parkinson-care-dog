@@ -102,6 +102,11 @@ class Settings:
     # 마지막에 서 있던 사람이 (과정을 못 봤는데) 누워 있으면 → 이 시간 후 알람 (넘어졌을 가능성 높음)
     fall_unseen_after_standing_s: float = 10.0
     fall_conf_unseen_standing: float = 0.8
+    # 이불 단서: 눕는 과정을 못 봤고 상체만 보이며 무릎·발목이 계속 안 보이면 (이불 덮음) 대기를 이만큼으로. None=안 씀
+    fall_lying_only_covered_s: float | None = 300.0
+    fall_covered_min_ratio: float = 0.8     # 누운 프레임 중 하체가 안 보인 비율이 이 이상이면 "덮음"
+    # 취침 선언("잘게" 음성·대시보드): 선언 후 이 시간 안에 눕지 않으면 선언 취소
+    sleep_declared_timeout_s: float = 1800.0
     fall_conf_descent: float = 1.0          # confidence = 이 가중치 × 핵심 관절 평균 신뢰도
     fall_conf_lying_only: float = 0.6
     fall_rearm_upright_s: float = 5.0       # 알람 후 이만큼 일어서/앉아 있어야 다음 낙상 알람 가능

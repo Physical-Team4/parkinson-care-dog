@@ -54,6 +54,11 @@ class VisionMonitor:
     def _occurred_at(self, now_s: float, event_s: float) -> datetime:
         return self.clock() - timedelta(seconds=max(0.0, now_s - event_s))
 
+    def set_sleep_mode(self, on: bool, now_s: float) -> None:
+        """취침 선언·해제. controller가 음성 "잘게"·대시보드 버튼을 받으면 호출 (입력 방법은 B·D와 협의)."""
+        log.info("취침 모드 %s", "선언" if on else "해제")
+        self.fall.set_sleep_mode(on, now_s)
+
     def update(self, people: list[PersonPose], now_s: float, robot_mode: str | None, esp32_ok: bool) -> Pose:
         person, feats = pick_primary(people, self.kpt_min_conf, self.frame_aspect)
 

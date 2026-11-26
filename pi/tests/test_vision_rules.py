@@ -358,3 +358,65 @@ def test_no_motion_off_while_resting():
     """소파에 스스로 누워 1시간 잠 → F7 알람 없음, F6 알람도 없음."""
     sent = run_monitor(timeline(*sofa_rest(), (3600, still("sofa_lying")), fps=1))
     assert sent == []
+
+
+# ── 취침 선언 ──
+def run_fall_sleep(frames, declare_at=0.0):
+    det = FallDetector(FallConfig.from_settings(S))
+    alarms, states = [], []
+    for now, people in frames:
+        if declare_at is not None and now >= declare_at:
+            det.set_sleep_mode(True, now)
+            declare_at = None
+        u = det.update(pick_primary(people, S.vision_kpt_min_conf, ASPECT)[1], now)
+        states.append((u.state, det.sleep_mode))
+        if u.alarm:
+            alarms.append(u.alarm)
+    return det, states, alarms
+
+
+def test_sleep_declared_then_lie_on_floor_from_standing_no_alarm():
+    """"잘게" 후 서 있다가 천천히 요에 눕기 → 느린 하강이어도 잠."""
+    det, _, alarms = run_fall_sleep(timeline((SETTLE, STAND), (4, lambda t: [pose("lying", t)]), (120, LIE)))
+    assert alarms == [] and det.resting and det.sleep_mode == "asleep"
+
+
+def test_sleep_declared_found_lying_unseen_no_alarm():
+    """선언 후 로봇이 놓쳤다가 바닥에 누운 사람 발견 → 잠."""
+    _, _, alarms = run_fall_sleep(timeline((SETTLE, STAND), (S.vision_lost_tolerance_s + 3, []), (300, LIE)))
+    assert alarms == []
+
+
+def test_sleep_mode_still_catches_fast_fall():
+    _, _, alarms = run_fall_sleep(timeline((SETTLE, STAND), (0.5, lambda t: [pose("lying", t)]), (8, LIE)))
+    assert [a.path for a in alarms] == ["descent"]
+
+
+def test_wake_up_stand_then_slow_fall_alarms():
+    """자다가(asleep) 일어서면 취침 모드 해제 → 그 뒤 천천히 쓰러지면 알람."""
+    frames = timeline((3, [pose("floor_sit")]), (3, lambda t: [pose("lying", t, frm="floor_sit")]), (30, LIE),
+                      (2, lambda t: [pose("standing", t, frm="lying")]), (SETTLE, STAND),
+                      (4, lambda t: [pose("lying", t)]), (10, LIE))
+    det, states, alarms = run_fall_sleep(frames)
+    assert ("lying", "asleep") in states and det.sleep_mode is None
+    assert [a.path for a in alarms] == ["slow_fall"]
+
+
+def test_sleep_declaration_times_out():
+    det, _, _ = run_fall_sleep(timeline((S.sleep_declared_timeout_s + 5, STAND), fps=1))
+    assert det.sleep_mode is None
+
+
+# ── 이불 단서 ──
+def covered_lying():
+    p = pose("lying")
+    k = p.keypoints.copy()
+    k[13:17, 2] = 0.1          # 무릎·발목 안 보임 (이불)
+    return [PersonPose(p.bbox, p.score, k)]
+
+
+def test_covered_lying_waits_longer():
+    _, alarms = run_fall(timeline((S.fall_lying_only_s + 30, covered_lying())))
+    assert alarms == []
+    _, alarms = run_fall(timeline((S.fall_lying_only_covered_s + 2, covered_lying()), fps=2))
+    assert [(a.path, a.detail["covered"]) for _, a in alarms] == [("lying_only", True)]
