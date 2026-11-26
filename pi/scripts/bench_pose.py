@@ -98,7 +98,7 @@ def main() -> None:
         capture = lambda: blank  # noqa: E731
     else:
         from pi.app.adapters.camera import PiCamera
-        cam = PiCamera((s.camera_width, s.camera_height))
+        cam = PiCamera((s.camera_width, s.camera_height), s.camera_hflip, s.camera_vflip)
         capture = cam.capture
 
     lat, pre, inf, post, cap = [], [], [], [], []
@@ -192,7 +192,7 @@ def main() -> None:
     else:
         print("사람 검출 프레임 0% (화면에 사람이 없었으면 정상)")
 
-    note = f"{wall / 60:.0f}분 측정" + ("" if not args.no_camera else ", 카메라 없음") + (f", {args.note}" if args.note else "")
+    note = (f"{wall / 60:.0f}분 측정" if wall >= 90 else f"{wall:.0f}초 측정") + ("" if not args.no_camera else ", 카메라 없음") + (f", {args.note}" if args.note else "")
     row = [
         dt.date.today().isoformat(), hef.stem, size, str(w), "Hailo-8L", hef_source(hef),
         f"{full_fps:.1f}", f"{infer_fps:.1f}", f"{statistics.median(lat):.0f} / {pct(lat, 95):.0f}",

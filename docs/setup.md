@@ -125,7 +125,13 @@ MZ_VERSION=v2.xx.0 bash pi/scripts/download_models.sh      # ✅ 나온 가장 �
 ```
 - 받은 파일마다 `parse-hef`로 열리는지·대상이 HAILO8L인지 확인하고, 출처 URL·sha256을 `SOURCES.txt`에 남긴다.
 - `.env`에 `POSE_HEF=hailo8l/yolov8s_pose.hef` (모델 선택 전에는 비워 둠 → 비전 끔).
-- 결과: (`--probe`로 열린 버전, 고른 버전 기록)
+- 결과 (2026-11-26, A, HailoRT 4.23.0): `--probe`에서 **v2.12.0 ~ v2.20.0 모두** yolov8s_pose가 열리고 대상 HAILO8L.
+  가장 높은 **v2.20.0** 사용.
+  - yolov8s_pose.hef sha256 `bff48661fd1b5085f256bcdcb5b460938f3f24a7421f189cfbbd74b74065d0d7`
+  - yolov8m_pose.hef sha256 `0b2a97b8a9d0cf8ff5b7ccbebc41083d39026ff5b79f67cbc3a6c5292aa9384a`
+  - `hailortcli run` (칩 단독, 기본 옵션): yolov8s_pose **62.59 FPS**, yolov8m_pose **30.40 FPS** ✅ 둘 다 실행됨.
+  - `bench_pose` 첫 실행: 출력 9개 = stride 8·16·32 × (64·1·51), **cls는 칩에서 sigmoid 적용됨, kpt conf는 아님**
+    (`pose 출력 sigmoid 적용: cls=False kpt_conf=True`). 640×480 카메라는 초당 30프레임에서 막힘 (캡처 대기 ~18ms).
 
 **벤치마크** (레포 루트, `pd-dog` 환경) → 출력 마지막 줄을 [benchmarks.md](benchmarks.md) 표에 붙인다:
 ```bash

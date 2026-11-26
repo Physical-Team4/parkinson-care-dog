@@ -144,7 +144,7 @@ def main() -> None:
             raise SystemExit("--hef 또는 .env POSE_HEF가 필요합니다.")
         estimator = HailoPoseEstimator(hef.expanduser(), s.pose_score_threshold,
                                        s.pose_iou_threshold, s.pose_max_people)
-        camera = PiCamera((s.camera_width, s.camera_height))
+        camera = PiCamera((s.camera_width, s.camera_height), s.camera_hflip, s.camera_vflip)
     if args.video:
         import simplejpeg  # picamera2와 함께 apt로 설치됨
         encode_jpeg = lambda f, q: simplejpeg.encode_jpeg(f, quality=q, colorspace="RGB")  # noqa: E731
