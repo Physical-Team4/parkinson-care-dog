@@ -222,6 +222,53 @@ sudo -n /usr/sbin/shutdown --help >/dev/null && echo OK
 - 대기열(SQLite)은 알람이 생길 때마다 바로 디스크에 저장되므로 종료 후 다음 부팅에 재전송된다.
 - 대시보드 battery_low 알람은 DB 트리거가 `robot_status`에서 만든다 (Pi가 따로 안 보냄).
 
+### 2-7. USB 핀마이크 입력 볼륨 (2026-11-27, A 측정 → B 확인)
+**증상(팀원 보고)**: 녹음 소리가 아주 작고, 바로 앞에서 손가락을 튕겨도 찢어지는 소리가 안 남. 녹음 후 5배 증폭하면 잡음도 같이 커짐.
+**원인**: ALSA **입력 볼륨(Mic Capture Volume)이 낮았음**. 녹음한 뒤에 숫자로 키우면 잡음까지 같이 커지므로, 녹음 단계(하드웨어)에서 올려야 한다.
+
+마이크: 일체형 USB 핀마이크(라발리에). `lsusb`에 `AB13X Headset Adapter`, `arecord -l`에 `card 2: AB13X USB Audio`로 보인다 (카드 번호는 바뀔 수 있음).
+
+**설정** (Pi, 마이크를 꽂은 상태)
+```bash
+arecord -l                          # card 번호 확인
+alsamixer -c 2                      # F4(Capture) → Mic를 80%로, 아래 빨간 CAPTURE가 켜져 있는지(Space) → Esc
+amixer -c 2 contents                # 확인: Mic Capture Switch=on, Mic Capture Volume≈7433/8191 (0~32dB 중 약 29dB)
+sudo alsactl store                  # 재부팅 후에도 유지
+```
+- **80~90% 권장.** 80%에서 바로 앞 손가락 튕김이 이미 최대치(0 dBFS)에 닿으므로, 100%는 가까이서 크게 말할 때 소리가 찢어질 수 있다.
+- `alsamixer`의 F3(Playback) 화면 `Mic`는 마이크 소리를 스피커로 들려주는 볼륨이라 녹음과 무관하다.
+
+**측정 결과 (볼륨 80%, `pd-dog` 환경, 저장 없이 0.25초마다 dBFS)**
+
+| 상황 | RMS (dBFS) | 최고 (dBFS) |
+|---|---|---|
+| 조용할 때 (잡음) | -60 ~ -65 | -48 ~ -55 |
+| 30cm에서 "아~" | -37 ~ -45 | -28 ~ -35 |
+| 바로 앞 손가락 튕김 | -15 ~ -37 | **-5 ~ 0** |
+
+- 30cm에서 목소리와 잡음 차이 약 20dB → 양호.
+- **1~2m(로봇과 사람 사이 거리)는 부족할 수 있다**: 거리가 2배마다 약 6dB 작아져 1m 약 -50, 2m 약 -56 dBFS로 예상 → 잡음과 차이 5~15dB.
+  실측·Vosk 인식률 확인 필요 ([todo.md](todo.md)). 핀마이크는 입 가까이(15~20cm) 다는 용도라 원거리에 약하다.
+- 볼륨을 올려도 잡음이 같이 올라가 목소리·잡음 차이는 거의 그대로다. 차이를 벌리려면 잡음원(Pi 쿨러 팬, MechDog 서보)에서
+  마이크를 떨어뜨리거나 원거리용 마이크를 쓴다.
+- **F4 dB 보정**: 입력 볼륨을 바꾸면 측정 dB도 바뀐다 → 볼륨을 고정한 **뒤에** 소음계로 `calibration_offset_db`를 정한다.
+
+측정 스크립트 (음성 원본 저장 없음, 메모리에서 계산 후 버림):
+```bash
+conda activate pd-dog
+python - <<'EOF'
+import sounddevice as sd, numpy as np, time
+dev = next(i for i, d in enumerate(sd.query_devices()) if "AB13X" in d["name"] and d["max_input_channels"] > 0)
+sr = int(sd.query_devices(dev)["default_samplerate"])
+db = lambda v: 20 * np.log10(max(float(v), 1e-10))
+def cb(indata, frames, t, status):
+    x = indata[:, 0]
+    print(f"RMS {db(np.sqrt(np.mean(x * x))):6.1f}  최고 {db(np.max(np.abs(x))):6.1f}")
+with sd.InputStream(device=dev, channels=1, samplerate=sr, blocksize=sr // 4, callback=cb):
+    time.sleep(20)
+EOF
+```
+
 ## 3. Supabase (D가 1회)
 1. Supabase에서 프로젝트 생성 (리전: 서울 `ap-northeast-2` 권장).
 2. SQL Editor에서 [db/migrations/](../db/migrations/) 001 → 004 순서대로 실행 ([db/README.md](../db/README.md)).
