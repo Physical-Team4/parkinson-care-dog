@@ -9,7 +9,7 @@
 | Hiwonder MechDog (Advanced) | 본체, ESP32, 서보 8개, IMU(QMI8658), 발광 초음파, 터치, MP3 | — |
 | Raspberry Pi 5 (4GB) | 엣지 서버, Raspberry Pi OS Lite, 호스트명 `pd-dog` | — |
 | Pi 카메라 모듈 3 | F6, F7 | CAM/DISP 0 (Pi 5용 22↔15핀 FFC) |
-| AI HAT+ 13 TOPS (Hailo-8L) | 포즈 추정 가속 (사용 여부 벤치마크 후 결정) | PCIe |
+| AI HAT+ 13 TOPS (Hailo-8L) | F6·F7 포즈 추론 ([decisions.md](decisions.md) D-009) | PCIe |
 | Pi 5 액티브 쿨러 | 발열 | FAN |
 | Suptronics X1200 v1.2 (18650 UPS 5V 5A) | Pi 전원, 잔량 | 밑면 포고 핀, 잔량 칩 I²C 0x36, 전원 차단 감지 GPIO6 |
 | 18650 × 2 (무보호, 플랫탑, 3000~3500mAh) | X1200용 | — |

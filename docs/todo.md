@@ -34,7 +34,7 @@
 | 터치 센서가 쓰는 IO (IO32/IO33) | 확인 예정 | D | `TOUCH_PIN`, 레이저 IO |
 | 레이저 연결 방법 | 방법 1(포트 3 공유) 채택 예정 | C·D | [decisions.md](decisions.md) D-002 |
 | ESP32 내장 Wi-Fi 사용 가능 여부 | `import network` 테스트 예정 | D | Pi 꺼짐 시 알림 경로 |
-| AI HAT+ 사용 여부 | 드라이버·conda 연결은 확인됨 ([setup.md](setup.md) 2-3). CPU vs Hailo 포즈 추론 벤치마크 예정 | A | `hailo` adapter |
+| Hailo 포즈 추론 FPS·지연 | Hailo 사용 확정 (D-009). `.hef` 준비 후 카메라→추론 FPS·지연 측정, 포즈 0.4초 주기 충족 확인 | A | `hailo` adapter, F6·F7 |
 | 대시보드 기술 스택 | 대시보드 README 확인 필요 | D | Supabase 클라이언트 |
 | environment.yml 새 패키지의 aarch64 + Python 3.13 설치 | 지금 목록은 Pi에서 설치 확인됨 (2026-11-26). 앞으로 추가할 패키지(onnxruntime, ultralytics 등)는 추가할 때 Pi에서 `conda env update` 확인 | A·B | `environment.yml` |
 | YOLO11n-pose / YOLO26n-pose의 Hailo-8L용 `.hef` | 기성 `.hef`가 없을 수 있음 → Hailo DFC로 변환 필요 (x86 Linux/WSL2, 대상 `hailo8l`) | A | F6·F7, [setup.md](setup.md) 2-3-1 |

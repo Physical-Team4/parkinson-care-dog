@@ -57,6 +57,12 @@
     정품 셀만 사용, 단락 주의, 장기 보관 시 분리.
 - 충전은 X1200 USB-C에 Pi 5용 27W PD 어댑터. Pi 본체 USB-C는 사용 안 함.
 
+## D-009 포즈 추론은 AI HAT+ (Hailo-8L)로 한다 (확정, 2026-11-26)
+- AI HAT+ 13T(Hailo-8L)를 구매·장착했고 Pi에서 동작 확인 (드라이버·conda 연결·VDevice, [setup.md](setup.md) 2-3).
+- F6·F7 포즈 추론은 Hailo에서 돌린다. "CPU 벤치마크 후 사용 여부 결정"은 폐기.
+- 남은 일: Hailo-8L용 포즈 모델 `.hef` 준비([todo.md](todo.md))와 FPS·지연 측정 (0.4초 주기 충족 확인).
+- CPU 추론은 PC 개발·테스트용으로만 (Pi 운영 경로 아님).
+
 ## DB 적용 기록
 Supabase에 마이그레이션을 적용하면 여기에 남긴다.
 
