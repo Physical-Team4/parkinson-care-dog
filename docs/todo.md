@@ -50,7 +50,6 @@
 | 잠자리 마커 | 요를 펴는 자리 머리맡에 마커 → 그 근처 + 취침 시간대에 누우면 잠. 보호자가 직접 등록 (자동 학습은 쓰러진 자리를 배울 위험). 마커 인식은 길찾기와 공용 | A | F6 "발견 시 이미 누움" 판단 |
 | 취침 시간대 설정 | 잠자리 마커·F7과 함께 사용. 대시보드 설정이면 DB 변경 필요 | A·D | F6·F7 |
 | 로봇 이동 (마커 길찾기) | 설계 초안 [navigation.md](navigation.md), D-012 제안. 다음: M0 실측(§11, 스크립트 `esp32/m0/`, `pi/scripts/marker_test.py`), `nav_move`·`nav_stop` 시리얼 메시지 C·D 검토 | A·C·D | 이동, 카메라 공유(이동 중 마커 / 도착 후 사람) |
-| OpenCV Pi 설치 | `environment.yml`에 `opencv` 추가 (2026-11-27, PC에서 마커 생성·인식 확인). Pi aarch64 + Python 3.13에서 `conda env update` 후 `import cv2; cv2.aruco` 확인 | A | 마커 인식 |
 | MechDog 배터리 전압 읽기 | 공식 시리얼 `CMD|6|$`(mV)는 사용 금지 프로토콜. Python API 확인 → `dog_battery_pct` (6.4V=0%, 8.4V=100%, `esp32/config.py`) | D | 대시보드 배터리 |
 | `robot_tipped` 임계값 | IMU `read_angle()` 기울기(X·Y)로 판단. M0 `sonar_imu_test.py`로 측정 후 `esp32/config.py` | C·D | 넘어짐, 이동 안전 정지 |
 | `move()` 범위 밖 각도 | 위키 범위 -30~30, 원본 코드는 ±40·±50 사용 → 잘림/오류 확인 (M0) | A·C | 걷기 값 |
@@ -72,5 +71,5 @@
 | 충전 중 여부 | 지금 `pi_charging` = 충전기 연결 여부 (실제 충전 중인지와 다를 수 있음, 만충 후에도 true) | D | 대시보드 표시 |
 | 외부 전원 차단 시 종료 여부 | 로봇은 평소 배터리로 주행 → 충전기 뽑을 때마다 종료되면 안 됨. 기본 꺼짐(`PI_SHUTDOWN_ON_POWER_LOSS=false`), 팀 합의 필요 | D·B | `services/power.py` |
 | Pi 안전 종료 잔량 기준 | 임시 10% (5~10% 사이). 부하 테스트 결과로 `pi/app/config.py` 조정 | D·B | 종료 시점 |
-| AI 추론 중 부하 테스트 | Hailo 추론 + 카메라 + 서보 동작 상태로 10~20분, `vcgencmd get_throttled`로 저전압(0x50005 등) 확인, 잔량 감소 속도 기록 | A·D | 전원, 배터리 정책 |
+| AI 추론 중 부하 테스트 | 배터리 2개를 따로 본다. **Pi(X1200)**: Hailo 추론 + 카메라 + 마커 인식 10~20분, `vcgencmd get_throttled` 저전압(0x50005 등)·X1200 잔량 감소 속도. **MechDog(LiPo)**: 걷기 시간당 잔량 감소 (서보는 Pi 배터리와 무관) | A·D | 전원, 배터리 정책 |
 | ESP32 `pi_low` 처리 | 플래그만 세움. MP3 트랙(`MP3_TRACK_PI_LOW`)·경보 모드 전환 구현 필요 | D | F1·F2 경보 |
