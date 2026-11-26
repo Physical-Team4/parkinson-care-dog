@@ -1,0 +1,61 @@
+# ── 민감 정보 (절대 커밋 금지) ──────────────────────
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+secrets/
+credentials*.json
+
+# ── DB·로그·개인 데이터 (화자 임베딩 포함) ─────────────
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+*.sqlite*
+logs/
+*.log
+data/
+
+# ── 모델 가중치 (내려받기 스크립트로 관리) ────────────
+models/weights/
+*.hef
+*.onnx
+*.pt
+*.pth
+*.tflite
+*.bin
+vosk-model*/
+
+# ── Python ───────────────────────────────────────
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+*.egg-info/
+.venv/
+venv/
+
+# ── Node (대시보드) ───────────────────────────────
+node_modules/
+dist/
+build/
+.next/
+
+# ── 에디터·OS ─────────────────────────────────────
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+Thumbs.db
+.claude/settings.local.json
+
+# ── Supabase CLI 로컬 파일 ──
+supabase/.temp/
+supabase/.branches/
+
+# ── Claude Code MCP 설정 (각자 PC에서 설정, 커밋 금지) ──
+.mcp.json
