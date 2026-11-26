@@ -133,7 +133,7 @@ IDLE ──목적지 요청──▶ LOCATE ──마커 보임──▶ ALIGN �
 | 단계 | 내용 | 담당·협의 |
 |---|---|---|
 | **M0 실측** | 제자리 회전, 회전·직진 속도, 초음파 단위·범위, IMU 기울기, 카메라 높이·화각, 마커 크기별 인식 거리 (§11) | A (+C: 걷기 값) |
-| **M1 마커 인식** | OpenCV `environment.yml` 추가·Pi 설치 확인, `pose_viewer`에 마커 표시 (방향·크기) | A |
+| **M1 마커 인식** | ✅ 2026-11-27: OpenCV 5.1.0 Pi 설치, `adapters/markers.py`(`MarkerDetector` + mock), `pose_viewer --markers`(테두리·번호·한 변 px·가로 위치·인식 ms, 설정 시 거리·방향) | A |
 | **M2 시리얼·안전** | §6 메시지 합의 → `serial-protocol.md` 확정, ESP32에 `nav_*`·초음파 정지·TTL 정지 | A·C·D |
 | **M3 마커 하나로 가기** | LOCATE → ALIGN → APPROACH | A |
 | **M4 여러 마커 경로** | 연결표·BFS·TURN_NEXT | A |
@@ -188,6 +188,8 @@ python -m pi.scripts.marker_test --generate 1 2 3 4 10 --out ~/pd-dog-data/marke
 python -m pi.scripts.marker_test --marker-cm 12 --at-cm 100 --seconds 10              # 마커를 1m에 두고 측정
 ```
 - 인쇄한 마커 한 변의 실제 길이를 `--marker-cm`에 넣는다. 거리별로 반복하면 마지막 줄에 표 한 줄이 나온다.
+- 거리별 "초점거리 추정"의 중앙값을 `.env`의 `CAMERA_FOCAL_PX`, 마커 크기를 `MARKER_SIZE_CM`에 넣으면 뷰어에 마커 거리·방향이 나온다.
+- 마커 인식 시간(CPU ms)도 같이 출력된다 → §8 자원 확인.
 - 카메라 화면은 저장하지 않는다 (숫자만 출력). 생성하는 PNG는 마커 그림이지 카메라 영상이 아니다.
 
 | 마커 크기 | 거리 | 인식률 | 화면상 한 변 (px) | 초점거리 추정 (px) | 비고 (조명·각도) |

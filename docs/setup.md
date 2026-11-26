@@ -155,6 +155,8 @@ ssh -L 8765:127.0.0.1:8765 <user>@<pi 주소>
 ```
 - 화면 옆에 FPS, 단계별 ms, 사람별 검출 점수·키포인트 평균 신뢰도·몸통 각도·bbox 비율이 나온다 (표시용).
 - 끝낼 때 Pi에서 Ctrl+C. 화면 저장·녹화 기능은 없다.
+- `--markers`: 로봇 이동 마커(ArUco)를 보라색 테두리·번호로 표시하고 패널에 한 변(px)·가로 위치·인식 시간(ms)을 보여준다.
+  `.env`에 `MARKER_SIZE_CM`·`CAMERA_FOCAL_PX`가 있으면 거리·방향도 나온다 ([navigation.md](navigation.md) §11).
 
 ### 2-4. ESP32 시리얼 포트 고정 (TODO)
 `/dev/ttyUSB0` 번호가 바뀔 수 있으니 udev 규칙으로 `/dev/pd-dog-esp32` 고정 예정.

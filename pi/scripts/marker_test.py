@@ -19,8 +19,6 @@ import statistics
 import time
 from pathlib import Path
 
-import numpy as np
-
 from pi.app.config import load_settings
 
 DICT_NAME = "DICT_4X4_50"
@@ -44,48 +42,41 @@ def generate(ids: list[int], out: Path, size_px: int) -> None:
         print(f"{path}  (검은 사각형 한 변을 자로 재서 --marker-cm에 넣기)")
 
 
-def side_px(c: np.ndarray) -> float:
-    """corners (4, 2) → 네 변 길이 평균."""
-    return float(np.mean([np.linalg.norm(c[i] - c[(i + 1) % 4]) for i in range(4)]))
-
-
 def measure(args) -> None:
-    cv2, d = aruco()
-    detector = cv2.aruco.ArucoDetector(d, cv2.aruco.DetectorParameters())
-    s = load_settings()
     from pi.app.adapters.camera import PiCamera   # Pi에서만
+    from pi.app.adapters.markers import ArucoMarkerDetector
+
+    s = load_settings()
+    detector = ArucoMarkerDetector(DICT_NAME)
     cam = PiCamera((s.camera_width, s.camera_height), s.camera_hflip, s.camera_vflip)
 
     frames = 0
     seen: dict[int, list[float]] = {}
     offsets: dict[int, list[float]] = {}
+    times: list[float] = []
     start = last = time.perf_counter()
     try:
         while args.seconds <= 0 or time.perf_counter() - start < args.seconds:
             frame = cam.capture()
-            gray = cv2.cvtColor(frame, cv2.COLOR_RGB2GRAY)
-            w = frame.shape[1]
+            found = detector.detect(frame)
             del frame                       # 프레임 즉시 폐기
-            corners, ids, _ = detector.detectMarkers(gray)
-            del gray
             frames += 1
-            if ids is not None:
-                for c, i in zip(corners, ids.flatten()):
-                    c = c.reshape(4, 2)
-                    seen.setdefault(int(i), []).append(side_px(c))
-                    # 화면 가운데 기준 가로 위치 -1(왼쪽)~+1(오른쪽)
-                    offsets.setdefault(int(i), []).append(float(c[:, 0].mean() / w * 2 - 1))
+            times.append(detector.last_ms)
+            for m in found:
+                seen.setdefault(m.marker_id, []).append(m.side_px)
+                offsets.setdefault(m.marker_id, []).append(m.cx * 2 - 1)   # -1(왼쪽)~+1(오른쪽)
             if time.perf_counter() - last >= 1.0:
                 last = time.perf_counter()
-                now = {i: (v[-1], offsets[i][-1]) for i, v in seen.items()}
-                print(f"{frames}프레임 | " + (", ".join(f"#{i}: 한 변 {p:.0f}px, 가로 {o:+.2f}"
-                                                     for i, (p, o) in sorted(now.items())) or "마커 없음"))
+                now = ", ".join(f"#{m.marker_id}: 한 변 {m.side_px:.0f}px, 가로 {m.cx * 2 - 1:+.2f}" for m in found)
+                print(f"{frames}프레임 | 인식 {detector.last_ms:.1f}ms | {now or '마커 없음'}")
     except KeyboardInterrupt:
         pass
     finally:
         cam.close()
 
     print()
+    if times:
+        print(f"마커 인식 시간: 중앙값 {statistics.median(times):.1f}ms, 최대 {max(times):.1f}ms (CPU)")
     if not seen:
         print(f"{frames}프레임 중 마커 인식 0 → 거리·크기·조명·초점 확인")
         return
@@ -95,7 +86,7 @@ def measure(args) -> None:
         focal = med * args.at_cm / args.marker_cm if args.at_cm and args.marker_cm else None
         print(f"#{i}: 인식률 {rate:.0f}% ({len(v)}/{frames}), 한 변 중앙값 {med:.1f}px, "
               f"가로 위치 중앙값 {statistics.median(offsets[i]):+.2f}"
-              + (f", 초점거리 추정 {focal:.0f}px" if focal else ""))
+              + (f", 초점거리 추정 {focal:.0f}px (→ .env CAMERA_FOCAL_PX)" if focal else ""))
         size = f"{args.marker_cm:g}cm" if args.marker_cm else "?"
         dist = f"{args.at_cm:g}cm" if args.at_cm else "?"
         print("navigation.md 표에 붙일 줄:")

@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>PD-Dog Pose Viewer</title>
 <style>
-  :root { --bg:#111418; --panel:#1b2027; --fg:#e6e9ee; --muted:#8b95a3; --ok:#3ccf7a; --mid:#f2c14e; --low:#e5534b; --box:#4aa8ff; }
+  :root { --bg:#111418; --panel:#1b2027; --fg:#e6e9ee; --muted:#8b95a3; --ok:#3ccf7a; --mid:#f2c14e; --low:#e5534b; --box:#4aa8ff; --marker:#c77dff; }
   * { box-sizing:border-box; }
   body { margin:0; background:var(--bg); color:var(--fg); font:14px/1.45 system-ui, sans-serif; }
   main { display:flex; gap:16px; padding:16px; flex-wrap:wrap; }
@@ -42,6 +42,7 @@
       <tr><td class="muted">안 움직인 시간 (F7)</td><td id="still">–</td></tr>
     </table>
     <p><button id="sleepOn">취침 선언 ("잘게" 시험)</button> <button id="sleepOff">해제</button></p>
+    <div id="markers"></div>
     <div id="alarms"></div>
     <div id="people"></div>
     <label>표시할 키포인트 최소 신뢰도 <b id="thv">0.30</b>
@@ -104,6 +105,7 @@ function draw(d, video) {
   const tm = d.timing || {};
   document.getElementById('timing').textContent = 'infer_ms' in tm ? `${tm.pre_ms} / ${tm.infer_ms} / ${tm.post_ms}` : '–';
   document.getElementById('n').textContent = d.people.length;
+  drawMarkers(d.markers, W, H);
   const j = d.judge;
   if (j) {
     const st = document.getElementById('state');
@@ -119,6 +121,26 @@ function draw(d, video) {
           `<div class="muted">${Object.entries(a.detail || {}).map(([k, v]) => k + '=' + v).join(' ')}</div></div>`).join('') + '</div>'
       : '';
   }
+}
+
+function drawMarkers(mk, W, H) {
+  const box = document.getElementById('markers');
+  if (!mk) { box.innerHTML = ''; return; }
+  ctx.strokeStyle = css('--marker'); ctx.fillStyle = css('--marker'); ctx.lineWidth = 3; ctx.font = 'bold 15px system-ui';
+  for (const m of mk.list) {
+    ctx.beginPath();
+    m.corners.forEach(([x, y], i) => i ? ctx.lineTo(x*W, y*H) : ctx.moveTo(x*W, y*H));
+    ctx.closePath(); ctx.stroke();
+    const [x0, y0] = m.corners[0];
+    ctx.fillText(`M${m.id}`, x0*W, Math.max(15, y0*H - 6));
+  }
+  const rows = mk.list.map(m => `<tr><td>M${m.id}</td><td>${m.side_px}px</td><td>${m.cx.toFixed(2)}</td>` +
+    `<td>${m.dist_cm == null ? '–' : m.dist_cm + 'cm'}</td><td>${m.bearing_deg == null ? '–' : m.bearing_deg + '°'}</td></tr>`).join('');
+  box.innerHTML = `<div class="person"><b>마커 (로봇 이동)</b> <span class="muted">인식 ${mk.ms} ms</span>` +
+    (mk.list.length
+      ? `<table><tr class="muted"><td>번호</td><td>한 변</td><td>가로</td><td>거리</td><td>방향</td></tr>${rows}</table>`
+      : '<div class="muted">마커 없음</div>') +
+    '<div class="muted">가로 0.5 = 화면 가운데. 거리·방향은 MARKER_SIZE_CM·CAMERA_FOCAL_PX 설정 후 표시 (방향 +는 오른쪽)</div></div>';
 }
 
 async function loop() {

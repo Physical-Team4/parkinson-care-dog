@@ -31,6 +31,10 @@ def _opt_int(value: str | None) -> int | None:
     return int(value) if value not in (None, "") else None
 
 
+def _opt_float(value: str | None) -> float | None:
+    return float(value) if value not in (None, "") else None
+
+
 @dataclass(frozen=True)
 class Settings:
     mock_hardware: bool
@@ -73,6 +77,12 @@ class Settings:
     pose_score_threshold: float = 0.5
     pose_iou_threshold: float = 0.7
     pose_max_people: int = 3
+
+    # ── 로봇 이동: 마커 (docs/navigation.md) ──
+    marker_dict: str = "DICT_4X4_50"
+    # 인쇄한 마커 한 변(cm), 카메라 초점거리(px). M0 실측(marker_test --at-cm) 후 .env에. None이면 거리·방향 추정 끔
+    marker_size_cm: float | None = None
+    camera_focal_px: float | None = None
 
     # ── F6·F7 판정 (services/vision/). ⚠️ 전부 임시값 → 집에서 실측 후 조정 (docs/todo.md) ──
     # 비율은 모두 "사람 bbox 높이 대비" (거리와 무관). 각도는 몸통(어깨 중점→엉덩이 중점)과 수직선 사이.
@@ -153,6 +163,8 @@ def load_settings(env_file: Path | None = None) -> Settings:
         log_dir=Path(env.get("PD_DOG_LOG_DIR") or data_dir / "logs"),
         model_dir=model_dir,
         pose_hef=pose_hef,
+        marker_size_cm=_opt_float(env.get("MARKER_SIZE_CM")),
+        camera_focal_px=_opt_float(env.get("CAMERA_FOCAL_PX")),
         camera_hflip=_bool(env.get("CAMERA_HFLIP"), default=False),
         camera_vflip=_bool(env.get("CAMERA_VFLIP"), default=False),
         x1200_pld_power_ok_level=_opt_int(env.get("X1200_PLD_POWER_OK_LEVEL")),
