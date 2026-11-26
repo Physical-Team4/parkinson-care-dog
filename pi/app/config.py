@@ -88,7 +88,14 @@ class Settings:
     fall_descent_ratio: float = 0.4         # 머리가 (서 있을 때 키의) 이 비율 이상 내려가면 "쓰러지는 중"
     fall_confirm_window_s: float = 10.0     # 쓰러지는 중 시작 후 이 시간 안에
     fall_confirm_lying_s: float = 3.0       # 누운 자세가 이만큼 이어지면 낙상 확정
-    # 쓰러지는 장면을 못 봤어도 누운 자세가 이만큼 이어지면 알람 (천천히 주저앉는 낙상 대비). None=끔
+    # F6 느린 낙상 vs 스스로 눕기 (엉덩이 높이). 앉기·서기를 settle_s 이상 유지한 자세가 "기준 자세"
+    fall_settle_s: float = 5.0
+    fall_onset_max_gap_s: float = 15.0      # 기준 자세 → 누움까지 이 시간 안이어야 "눕는 과정을 봄"
+    # 기준 자세 대비 엉덩이 하강 / 기준 몸통 길이 ≥ 이 값 → 느린 낙상 (소파에 눕기는 엉덩이 높이가 거의 그대로)
+    slow_fall_hip_drop_ratio: float = 0.5
+    slow_fall_confirm_s: float = 5.0        # 느린 낙상: 누운 자세가 이만큼 이어지면 알람
+    fall_conf_slow: float = 0.9
+    # 눕는 과정을 못 봤는데 누운 자세가 이만큼 이어지면 알람 (낮은 confidence). None=끔
     fall_lying_only_s: float | None = 60.0
     fall_conf_descent: float = 1.0          # confidence = 이 가중치 × 핵심 관절 평균 신뢰도
     fall_conf_lying_only: float = 0.6

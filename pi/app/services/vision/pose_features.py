@@ -24,6 +24,7 @@ class PoseFeatures:
     """판정 가능한 pose의 요약. 판정 불가면 extract()가 None을 준다."""
     score: float
     head_y: float          # 머리(없으면 어깨) y, 0~1
+    hip_y: float           # 엉덩이 중점 y, 0~1
     bbox_h: float          # bbox 높이, 0~1
     bbox_aspect: float     # bbox 가로/세로 (픽셀 기준)
     torso_deg: float       # 0 = 똑바로 섬, 90 = 수평
@@ -61,7 +62,7 @@ def extract(p: PersonPose, min_conf: float, frame_aspect: float) -> PoseFeatures
     bbox_h = max(y2 - y1, 1e-6)
     core = [k[i, 2] for i in (L_SHOULDER, R_SHOULDER, L_HIP, R_HIP)]
     return PoseFeatures(
-        score=p.score, head_y=head_y, bbox_h=bbox_h,
+        score=p.score, head_y=head_y, hip_y=float(hip[1]), bbox_h=bbox_h,
         bbox_aspect=(x2 - x1) * frame_aspect / bbox_h,
         torso_deg=torso_deg, torso_len=torso_len, thigh_ratio=thigh,
         core_conf=float(np.mean(core)), visible=vis, keypoints=k,
