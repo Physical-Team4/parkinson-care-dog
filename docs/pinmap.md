@@ -8,7 +8,7 @@
 |---|---|---|---|
 | 포트 1 | IIC2 | VL53L1X (0x29) | JST-PH 2.0 → 이음 → 점퍼 암. ❓ 핀 순서·VCC 전압 |
 | 포트 2 | IIC1 (내장 초음파와 같은 버스) | MP3 모듈 | `Hiwonder_IIC.MP3(Hiwonder_IIC.IIC(1))` |
-| 포트 3 | IO32, IO33 | 터치 센서 (+ 레이저 예정) | 예제 `Hiwonder.Button(2)`. ❓ 터치가 IO32/IO33 중 무엇인지 |
+| 포트 3 | IO32, IO33 | 터치 센서 (+ 레이저 예정) | 터치 = **IO33**, 누르면 0 / 떼면 1, 내부 PULL_UP (2026-11-26 D 확인). ❓ 레이저 IO |
 | 내장 | IIC1 | 발광 초음파 | 앞 장애물, RGB 점멸 |
 | Type-C | USB 시리얼 | Pi 5 | MicroPython REPL과 같은 포트 ([serial-protocol.md](serial-protocol.md)) |
 | NC·+·− 3핀 | — | ⚠️ 배터리 입력 | 사용 금지 |

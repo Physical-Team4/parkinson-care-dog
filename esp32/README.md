@@ -7,7 +7,7 @@ main.py          진입점 (모드 루프, 부팅 시 자동 실행)
 config.py        핀·주소·타이밍 (미확정 값은 None)
 controllers/     시리얼 명령(serial_cmd.py), 하트비트(heartbeat.py)
 services/        F3 박자(rhythm.py), 보행(gait.py), F1(medication.py), F2(touch.py)
-drivers/         VL53L1X, MP3, 레이저
+drivers/         VL53L1X, MP3, 레이저, 터치(touch_pad.py), 눈 RGB(eyes.py)
 ```
 
 ## 업로드 방법
@@ -24,6 +24,8 @@ mpremote connect <PORT> repl             # 출력 보기 (Ctrl-] 종료)
 ```
 - ⚠️ 보드에 이미 있는 `main.py`(Hiwonder 기본 동작)를 덮어쓴다. 처음 한 번은 `mpremote fs cp :main.py backup_main.py`로 백업.
 - 포트를 다른 프로그램(Pi 앱, Hiwonder Editor)이 쓰고 있으면 실패한다. 먼저 닫을 것.
+- ⚠️ MechDog 펌웨어는 mpremote의 소프트 리셋 중에 멈추고 재부팅될 수 있다 (`Guru Meditation Error`, `could not enter raw repl`).
+  → 포트 뒤에 `resume`을 붙여 리셋 없이 실행: `mpremote connect <PORT> resume run test.py` (보드에 저장 안 하고 실행만).
 - 업로드 중 펌웨어가 꼬이면: 위키 "MechDog Resources > Firmware Flashing Tool and Firmware"로 복구.
 
 ### 방법 2: Hiwonder Python Editor
