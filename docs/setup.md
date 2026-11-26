@@ -135,6 +135,8 @@ MZ_VERSION=v2.xx.0 bash pi/scripts/download_models.sh      # ✅ 나온 가장 �
   - `bench_pose` 첫 실행: 출력 9개 = stride 8·16·32 × (64·1·51), **cls는 칩에서 sigmoid 적용됨, kpt conf는 아님**
     (`pose 출력 sigmoid 적용: cls=False kpt_conf=True`). 640×480 카메라는 초당 30프레임에서 막힘 (캡처 대기 ~18ms).
 
+**가구 검출 확인용 모델** (선택): `MZ_VERSION=v2.20.0 bash pi/scripts/download_models.sh yolov8s` → `python -m pi.scripts.furniture_check --help`
+
 **벤치마크** (레포 루트, `pd-dog` 환경) → 출력 마지막 줄을 [benchmarks.md](benchmarks.md) 표에 붙인다:
 ```bash
 hailortcli run ~/pd-dog-models/hailo8l/yolov8s_pose.hef                          # (참고) 칩 단독 FPS
