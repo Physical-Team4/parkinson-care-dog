@@ -106,6 +106,8 @@ d = VDevice(); print('hailo ok'); d.release()
 "
 ```
 - conda나 apt 업데이트로 numpy major가 달라지면(예: conda numpy 3.x) 위 명령을 다시 돌려 확인한다.
+- 2026-11-27 `opencv` 추가 후 `conda env update -f environment.yml --prune` (반드시 `conda activate pd-dog` 상태에서 확인):
+  `check_pi_env.sh` 모두 ✅, numpy conda 2.5.5 그대로, OpenCV **5.1.0** (`cv2.aruco` 있음), `pytest pi/tests` 71 passed. PC도 같은 버전.
 
 ### 2-3-1. AI HAT+ 13T = Hailo-8L
 - AI HAT+ 13 TOPS의 칩은 **Hailo-8L**이다 (`lspci`에는 "Hailo-8"로 나올 수 있음 → `hailortcli fw-control identify`의

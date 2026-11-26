@@ -50,7 +50,6 @@
 | 잠자리 마커 | 요를 펴는 자리 머리맡에 마커 → 그 근처 + 취침 시간대에 누우면 잠. 보호자가 직접 등록 (자동 학습은 쓰러진 자리를 배울 위험). 마커 인식은 길찾기와 공용 | A | F6 "발견 시 이미 누움" 판단 |
 | 취침 시간대 설정 | 잠자리 마커·F7과 함께 사용. 대시보드 설정이면 DB 변경 필요 | A·D | F6·F7 |
 | 로봇 이동 (마커 길찾기) | 설계 초안 [navigation.md](navigation.md), D-012 제안. 다음: M0 실측(§11, 스크립트 `esp32/m0/`, `pi/scripts/marker_test.py`), `nav_move`·`nav_stop` 시리얼 메시지 C·D 검토 | A·C·D | 이동, 카메라 공유(이동 중 마커 / 도착 후 사람) |
-| OpenCV Pi 설치 | `environment.yml`에 `opencv` 추가 (2026-11-27, PC에서 마커 생성·인식 확인). Pi aarch64 + Python 3.13에서 `conda env update` 후 `import cv2; cv2.aruco` 확인 | A | 마커 인식 |
 | MechDog 배터리 전압 읽기 | 공식 시리얼 `CMD|6|$`(mV)는 사용 금지 프로토콜. Python API 확인 → `dog_battery_pct` (6.4V=0%, 8.4V=100%, `esp32/config.py`) | D | 대시보드 배터리 |
 | `robot_tipped` 임계값 | IMU `read_angle()` 기울기(X·Y)로 판단. M0 `sonar_imu_test.py`로 측정 후 `esp32/config.py` | C·D | 넘어짐, 이동 안전 정지 |
 | `move()` 범위 밖 각도 | 위키 범위 -30~30, 원본 코드는 ±40·±50 사용 → 잘림/오류 확인 (M0) | A·C | 걷기 값 |
