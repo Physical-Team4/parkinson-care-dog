@@ -21,6 +21,8 @@
   .person { border-top:1px solid #2c333d; margin-top:8px; padding-top:8px; }
   label { display:block; margin-top:12px; }
   input[type=range] { width:100%; }
+  button { background:#2c333d; color:var(--fg); border:1px solid #3a4250; border-radius:6px; padding:6px 10px; font:inherit; cursor:pointer; }
+  button:hover { background:#36404c; }
   .legend span { display:inline-block; width:10px; height:10px; border-radius:50%; margin:0 4px 0 10px; vertical-align:middle; }
 </style>
 </head>
@@ -39,6 +41,7 @@
       <tr><td class="muted">판정 상태 (F6)</td><td id="state" style="font-weight:700">–</td></tr>
       <tr><td class="muted">안 움직인 시간 (F7)</td><td id="still">–</td></tr>
     </table>
+    <p><button id="sleepOn">취침 선언 ("잘게" 시험)</button> <button id="sleepOff">해제</button></p>
     <div id="alarms"></div>
     <div id="people"></div>
     <label>표시할 키포인트 최소 신뢰도 <b id="thv">0.30</b>
@@ -54,6 +57,8 @@ const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).
 const th = document.getElementById('th');
 th.oninput = () => document.getElementById('thv').textContent = (+th.value).toFixed(2);
 const img = new Image();
+document.getElementById('sleepOn').onclick = () => fetch('/sleep?on=1');
+document.getElementById('sleepOff').onclick = () => fetch('/sleep?on=0');
 
 function torsoAngle(k, t) {
   const ok = i => k[i][2] >= t;
@@ -103,7 +108,8 @@ function draw(d, video) {
   if (j) {
     const st = document.getElementById('state');
     const LABEL = {none: '사람 없음/판정 불가', standing: '서 있음', sitting: '앉음', falling: '쓰러짐 의심', lying: '누움'};
-    st.textContent = `${LABEL[j.state] || j.state} (${j.state})`;
+    const SLEEP = {declared: ' · 취침 선언함', asleep: ' · 잠듦'};
+    st.textContent = `${LABEL[j.state] || j.state} (${j.state})` + (j.resting ? ' · 쉬는 중' : '') + (SLEEP[j.sleep] || '');
     st.style.color = j.state === 'falling' ? css('--mid') : j.state === 'lying' ? css('--low') : '';
     document.getElementById('still').textContent = `${j.still_s}초`;
     document.getElementById('alarms').innerHTML = j.alarms.length

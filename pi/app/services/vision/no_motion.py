@@ -6,6 +6,7 @@
 - 로봇이 움직이는 중(ESP32 mode가 이동 모드)이거나 모드를 모를 때(esp32_ok=false)는 카메라가 흔들리므로
   누적을 멈추고 초기화한다 (docs/features.md).
 - "사람 없음/판정 불가"와 "움직임 없음"을 구분: 사람이 absent_reset_s 넘게 안 보이면 초기화, 알람 안 냄.
+- 기준 시간은 자세별 (서 있음 짧게, 앉음 길게(TV), 스스로 누워 쉬는 중(잠)은 끔). 자세는 F6 결과를 받는다.
 """
 from __future__ import annotations
 
@@ -18,14 +19,20 @@ from pi.app.services.vision.pose_features import PoseFeatures
 
 @dataclass(frozen=True)
 class NoMotionConfig:
-    still_s: float
+    still_s: float                  # 그 외 (누움 등)
+    still_s_standing: float
+    still_s_sitting: float
+    still_s_resting: float | None   # None = 알람 안 함
     threshold: float
     absent_reset_s: float
     min_common_kpts: int
 
     @classmethod
     def from_settings(cls, s) -> NoMotionConfig:
-        return cls(still_s=s.no_motion_minutes * 60, threshold=s.no_motion_threshold,
+        rest = s.no_motion_minutes_resting
+        return cls(still_s=s.no_motion_minutes * 60, still_s_standing=s.no_motion_minutes_standing * 60,
+                   still_s_sitting=s.no_motion_minutes_sitting * 60,
+                   still_s_resting=rest * 60 if rest is not None else None, threshold=s.no_motion_threshold,
                    absent_reset_s=s.no_motion_absent_reset_s, min_common_kpts=s.no_motion_min_common_kpts)
 
 
@@ -48,6 +55,12 @@ class NoMotionDetector:
         self._ref = None
         self._alarmed = False
 
+    def limit_s(self, context: str | None) -> float | None:
+        """context: F6 상태(standing/sitting/lying/falling/none) 또는 "resting"."""
+        c = self.cfg
+        return {"standing": c.still_s_standing, "sitting": c.still_s_sitting,
+                "resting": c.still_s_resting}.get(context or "", c.still_s)
+
     def still_s(self, now: float) -> float:
         return now - self._ref_s if self._ref is not None else 0.0
 
@@ -61,7 +74,8 @@ class NoMotionDetector:
         dist = np.hypot(d[:, 0] * self.frame_aspect, d[:, 1])
         return float(dist.mean()) / ref.bbox_h
 
-    def update(self, f: PoseFeatures | None, now: float, robot_moving: bool | None) -> NoMotionAlarm | None:
+    def update(self, f: PoseFeatures | None, now: float, robot_moving: bool | None,
+               context: str | None = None) -> NoMotionAlarm | None:
         if robot_moving is not False:          # 이동 중 또는 모름
             self.reset()
             return None
@@ -81,8 +95,9 @@ class NoMotionDetector:
         if self._ref is None:
             self._ref, self._ref_s = f, now
             return None
-        if not self._alarmed and now - self._ref_s >= self.cfg.still_s:
+        limit = self.limit_s(context)
+        if limit is not None and not self._alarmed and now - self._ref_s >= limit:
             self._alarmed = True
             return NoMotionAlarm(now, {"still_min": round((now - self._ref_s) / 60, 1),
-                                       "threshold": self.cfg.threshold})
+                                       "posture": context, "threshold": self.cfg.threshold})
         return None

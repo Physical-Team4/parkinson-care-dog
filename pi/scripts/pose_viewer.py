@@ -112,11 +112,12 @@ class Judge:
                                 "confidence": pl["p_confidence"], "detail": pl["p_detail"]})
             log.warning("판정 알람 (전송 안 함): %s", self.alarms[-1])
         self.alarms = self.alarms[-5:]
-        return {"state": pose.state, "still_s": round(self.monitor.no_motion.still_s(now_s)),
+        return {"state": pose.state, "resting": self.monitor.fall.resting, "sleep": self.monitor.fall.sleep_mode,
+                "still_s": round(self.monitor.no_motion.still_s(now_s)),
                 "alarms": self.alarms}
 
 
-def make_handler(latest: Latest, video: bool):
+def make_handler(latest: Latest, video: bool, judge: Judge | None = None):
     page = PAGE.read_bytes()
 
     class Handler(BaseHTTPRequestHandler):
@@ -135,6 +136,10 @@ def make_handler(latest: Latest, video: bool):
             url = urlparse(self.path)
             if url.path == "/":
                 self._send(200, "text/html; charset=utf-8", page)
+            elif url.path == "/sleep" and judge is not None:   # 시험용: 취침 선언·해제 ("잘게" 대신)
+                on = parse_qs(url.query).get("on", ["0"])[0] == "1"
+                judge.monitor.set_sleep_mode(on, time.perf_counter())
+                self._send(200, "text/plain", b"ok")
             elif url.path == "/latest":
                 after = int(parse_qs(url.query).get("after", ["0"])[0])
                 seq, data = latest.wait_after(after, timeout=2.0)
@@ -178,11 +183,11 @@ def main() -> None:
         encode_jpeg = lambda f, q: simplejpeg.encode_jpeg(f, quality=q, colorspace="RGB")  # noqa: E731
         log.warning("⚠️ --video: 카메라 화면을 SSH 터널로 보냅니다 (개발용, 저장 안 함, D-011)")
 
-    latest, stop = Latest(), threading.Event()
+    latest, stop, judge = Latest(), threading.Event(), Judge(s)
     worker = threading.Thread(target=run_loop, args=(camera, estimator, latest, encode_jpeg, stop, args.quality,
-                                    0.1 if args.mock else 0.0, Judge(s)),
+                                    0.1 if args.mock else 0.0, judge),
                               daemon=True)
-    server = ThreadingHTTPServer(("127.0.0.1", args.port), make_handler(latest, args.video))
+    server = ThreadingHTTPServer(("127.0.0.1", args.port), make_handler(latest, args.video, judge))
     server.daemon_threads = True
     worker.start()
     log.info("http://127.0.0.1:%d  (노트북: ssh -L %d:127.0.0.1:%d <user>@<pi> 후 http://localhost:%d)",
