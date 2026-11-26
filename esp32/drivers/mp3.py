@@ -1,4 +1,4 @@
-# MP3 모듈 (담당: D). 포트 2 (IIC1). 위키 예제: Hiwonder_IIC.MP3(Hiwonder_IIC.IIC(1))
+# MP3 모듈 (담당: C). 포트 2 (IIC1). 위키 예제: Hiwonder_IIC.MP3(Hiwonder_IIC.IIC(1))
 # play(track) / volume(v) / pause()는 실기기에서 동작 확인함 (C, F3 박자음 테스트).
 # 트랙 번호 = SD 카드 파일 번호. 번호는 config.MP3_TRACK_* 에서만 읽는다.
 import config
