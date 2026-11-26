@@ -3,7 +3,7 @@
 보호자·치료사가 알람을 받고 확인하며, 로봇 상태·훈련 기록을 보고, 복약 알림과 훈련 목표를 정하는 웹 화면.
 데이터는 **Supabase에 직접 연결**한다 (별도 API 서버 없음, [docs/api.md](../docs/api.md) · [docs/db.md](../docs/db.md)).
 
-- 수정 계획·분석: [PROJECT_PLAN.md](PROJECT_PLAN.md) · 진행·테스트 기록: [progress.md](progress.md)
+- 수정 계획·분석: [PROJECT_PLAN.md](PROJECT_PLAN.md) · 진행·테스트 기록: [progress.md](progress.md) · 관리자 페이지 계획(미구현): [ADMIN_PLAN.md](ADMIN_PLAN.md)
 - 원본: `steve5781-a11y/pd-dog-dashboard` (cb636aa)에서 이관 (2026-11-26). 이관 당시 설계 기록: [PLAN.md](PLAN.md), [PLAN-REVIEW-LOG.md](PLAN-REVIEW-LOG.md) — SQLite·자체 로그인 시절 문서라 지금 구조와 다름.
 
 ## 실행
