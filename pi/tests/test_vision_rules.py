@@ -32,6 +32,9 @@ _PTS = {
                    13: (.62, .88), 14: (.64, .88), 15: (.72, .92), 16: (.74, .92)}, (.42, .55, .78, .95)),
     "lying": ({0: (.20, .85), 5: (.30, .84), 6: (.30, .86), 11: (.55, .84), 12: (.55, .86),
                13: (.72, .84), 14: (.72, .86), 15: (.88, .84), 16: (.88, .86)}, (.15, .78, .92, .92)),
+    # 소파에 누움: 엉덩이가 앉았을 때(sitting) 높이 그대로
+    "sofa_lying": ({0: (.20, .66), 5: (.30, .69), 6: (.30, .71), 11: (.55, .69), 12: (.55, .71),
+                    13: (.72, .69), 14: (.72, .71), 15: (.88, .69), 16: (.88, .71)}, (.15, .62, .92, .76)),
 }
 
 
@@ -214,3 +217,59 @@ def test_monitor_sends_camera_alert_and_pose():
     assert op.payload["p_occurred_at"] < T0.isoformat()      # 쓰러지기 시작한 시각 (확정보다 이전)
     assert "keypoints" not in op.payload["p_detail"]          # 키포인트 이력 금지
     assert mon.update([], frames[-1][0] + 10, "idle", True).to_json() == {"state": "none", "keypoints": []}
+
+
+# ── F6 느린 낙상 vs 스스로 눕기 (엉덩이 높이) ──
+SETTLE = S.fall_settle_s + 1
+
+
+def test_slow_collapse_from_standing_alarms():
+    """서 있다가 4초에 걸쳐 천천히 무너짐 → 빠른 하강은 아니지만 엉덩이가 크게 내려감 → slow_fall."""
+    states, alarms = run_fall(timeline((SETTLE, STAND), (4, lambda t: [pose("lying", t)]), (8, LIE)))
+    assert [a.path for _, a in alarms] == ["slow_fall"]
+    when, a = alarms[0]
+    assert a.detail["from"] == "standing" and a.detail["hip_drop"] >= S.slow_fall_hip_drop_ratio
+    assert a.event_s == pytest.approx(SETTLE, abs=1.5)        # 기준 자세를 벗어난 때
+    assert "falling" in states
+
+
+def test_slide_off_chair_alarms():
+    """의자에 앉아 있다가 3초에 걸쳐 바닥으로 미끄러져 누움 → slow_fall (from sitting)."""
+    _, alarms = run_fall(timeline((SETTLE, SIT), (3, lambda t: [pose("lying", t, frm="sitting")]), (8, LIE)))
+    assert [(a.path, a.detail["from"]) for _, a in alarms] == [("slow_fall", "sitting")]
+
+
+def test_lie_down_on_sofa_no_alarm():
+    """소파에 앉아 있다가 천천히 눕기 → 엉덩이 높이 그대로 → 알람 없음 (lying_only도 안 남)."""
+    sofa = [pose("sofa_lying")]
+    states, alarms = run_fall(timeline((SETTLE, SIT), (3, lambda t: [pose("sofa_lying", t, frm="sitting")]),
+                                       (S.fall_lying_only_s + 30, sofa)))
+    assert alarms == [] and states[-1] == "lying"
+
+
+def test_flop_onto_sofa_no_alarm():
+    """소파에 털썩 눕기: 머리는 빠르게 내려가지만(falling) 엉덩이 높이 그대로 → 취소, 알람 없음."""
+    states, alarms = run_fall(timeline((SETTLE, SIT), (0.5, lambda t: [pose("sofa_lying", t, frm="sitting")]),
+                                       (20, [pose("sofa_lying")])))
+    assert "falling" in states and alarms == [] and states[-1] == "lying"
+
+
+def test_floor_sit_then_lie_down_no_alarm():
+    """바닥에 앉아 있다가 요에 눕기 (좌식 생활) → 엉덩이가 더 내려가지 않음 → 알람 없음."""
+    _, alarms = run_fall(timeline((SETTLE, [pose("floor_sit")]),
+                                  (3, lambda t: [pose("lying", t, frm="floor_sit")]), (S.fall_lying_only_s + 30, LIE)))
+    assert alarms == []
+
+
+def test_brief_crouch_during_slow_fall_does_not_reset_reference():
+    """천천히 무너지다 2초 웅크림(앉음으로 분류) → settle 못 채움 → 기준은 서 있던 자세 그대로."""
+    crouch = [pose("sitting", 0.6, frm="standing")]
+    _, alarms = run_fall(timeline((SETTLE, STAND), (1, lambda t: [pose("sitting", 0.6 * t)]), (2, crouch),
+                                  (3, lambda t: [pose("lying", t, frm="sitting")]), (8, LIE)))
+    assert [a.path for _, a in alarms] == ["slow_fall"]
+
+
+def test_unseen_onset_still_uses_lying_only():
+    """오래 사람을 놓쳤다가(기준 자세 초기화) 누운 상태로 발견 → lying_only."""
+    _, alarms = run_fall(timeline((SETTLE, SIT), (S.vision_lost_tolerance_s + 2, []), (S.fall_lying_only_s + 2, LIE)))
+    assert [a.path for _, a in alarms] == ["lying_only"]
