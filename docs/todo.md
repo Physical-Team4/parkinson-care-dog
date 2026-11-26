@@ -35,6 +35,9 @@
 | 레이저 연결 방법 | 방법 1(포트 3 공유) 채택 예정 | C·D | [decisions.md](decisions.md) D-002 |
 | ESP32 내장 Wi-Fi 사용 가능 여부 | `import network` 테스트 예정 | D | Pi 꺼짐 시 알림 경로 |
 | Model Zoo hailo8l pose 모델 벤치마크 | yolov8s_pose, yolov8m_pose 등으로 FPS·지연·누운 자세 인식·전력 측정 → [benchmarks.md](benchmarks.md). 10fps 이상 중 가장 정확한 모델 선택 (D-010) | A | `hailo` adapter, F6·F7 |
+| Model Zoo 버전 (HailoRT 4.23) | 공식 대응표 없음. `download_models.sh --probe`로 열리는 버전 확인 후 [setup.md](setup.md) 2-3-2에 기록 | A | `.hef` 출처 |
+| pose 검출 점수·NMS 임계값 | 임시 0.5 / 0.7 (`pi/app/config.py`). 누운 자세 측정 후 조정 | A | `hailo` adapter |
+| picamera2 채널 순서 | `BGR888` = numpy RGB로 가정 (picamera2 문서). Pi에서 빨간 물체로 확인 필요 | A | 모델 입력 색 |
 | 카메라 각도·거리 조정 테스트 | 학습 전에 카메라 각도, 사용자 거리 2~3m, 입력 해상도로 누운 자세 인식률 확인 ([features.md](features.md#f6f7-비전-계획)) | A | F6·F7, 카메라 장착 위치 |
 | F6·F7 판정 임계값 | 하강 속도·몸통 각도·누운 지속 시간, 무움직임 N분·이동량 임계값 → 실측 후 `pi/app/config.py` | A | F6·F7 |
 | 로봇 이동 모드 목록 | F7은 이동 중 모드에서 누적 중단. 지금 프로토콜 이동 모드는 `walking`뿐. `approaching` 등 추가되면 [serial-protocol.md](serial-protocol.md) `mode`와 `pi/app/config.py` 목록에 같이 반영 | A·C·D | F7 |

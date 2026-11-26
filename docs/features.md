@@ -13,6 +13,7 @@
 
 ## 공통 원칙
 - 영상은 저장·전송하지 않음 (실시간 처리 후 폐기). 대시보드에는 키포인트만 Realtime Broadcast로 보냄 (저장 안 함).
+  개발 중 확인용 뷰어만 예외 ([decisions.md](decisions.md) D-011).
 - 음성 원본은 저장하지 않음. 화자 임베딩은 Pi 로컬에만 (Supabase에 올리지 않음).
 - 음성 인식·dB 측정은 서보가 멈춘 상태에서 (모터 소음 때문).
 - 레이저는 기본 꺼짐, 바닥만 향하게 (눈 높이 금지).
@@ -82,4 +83,6 @@
    - 어느 쪽이든 hailo8l용 `.hef` 변환(DFC)이 필요하다.
 
 ## 모델 파일
-가중치는 레포에 넣지 않는다. 받는 위치·명령은 `pi/scripts/download_models.sh`에 적는다 (TODO: 각 담당자가 모델 확정 후 작성).
+가중치는 레포에 넣지 않는다. 받는 위치·명령은 `pi/scripts/download_models.sh`에 적는다.
+- F6·F7 pose(A): Hailo Model Zoo hailo8l `.hef` → `~/pd-dog-models/hailo8l/` ([setup.md](setup.md) 2-3-2).
+- 음성(B): TODO (모델 확정 후 같은 스크립트에 추가).

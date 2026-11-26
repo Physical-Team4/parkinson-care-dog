@@ -4,6 +4,7 @@ services는 이 Protocol 타입만 알고, 어떤 구현이 들어오는지는 m
 """
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Protocol
 
 import numpy as np
@@ -36,8 +37,41 @@ class Esp32Link(Protocol):
 
 class Camera(Protocol):
     def capture(self) -> np.ndarray:
-        """RGB 프레임 1장. 호출한 쪽은 처리 후 즉시 버린다 (저장 금지)."""
+        """RGB 프레임 1장 (H, W, 3) uint8. 호출한 쪽은 처리 후 즉시 버린다 (저장 금지)."""
         ...
+
+    def close(self) -> None: ...
+
+
+# COCO 17 키포인트 순서 (YOLOv8-pose 출력 순서와 같음)
+COCO_KEYPOINTS = (
+    "nose", "left_eye", "right_eye", "left_ear", "right_ear",
+    "left_shoulder", "right_shoulder", "left_elbow", "right_elbow",
+    "left_wrist", "right_wrist", "left_hip", "right_hip",
+    "left_knee", "right_knee", "left_ankle", "right_ankle",
+)
+
+
+@dataclass(frozen=True)
+class PersonPose:
+    """사람 1명의 pose. 좌표는 모두 **원본 프레임 기준 0~1** (해상도·letterbox와 무관).
+
+    프레임 자체는 담지 않는다 → 이 객체는 저장·전송해도 영상이 남지 않는다.
+    """
+    bbox: tuple[float, float, float, float]   # x1, y1, x2, y2
+    score: float                              # 사람 검출 신뢰도 0~1
+    keypoints: np.ndarray                     # (17, 3) float32: x, y, conf
+
+
+class PoseEstimator(Protocol):
+    """카메라 프레임 → 사람별 bbox + COCO 17 키포인트 (adapters/hailo.py, mock)."""
+    input_size: tuple[int, int]   # 모델 입력 (W, H)
+
+    def infer(self, frame: np.ndarray) -> list[PersonPose]:
+        """RGB (H, W, 3) uint8. 신뢰도 높은 순. 사람 없으면 빈 리스트. frame은 보관하지 않는다."""
+        ...
+
+    def close(self) -> None: ...
 
 
 class Microphone(Protocol):

@@ -60,6 +60,17 @@ class Settings:
     pi_shutdown_confirm_checks: int = 3     # 연속 N번 확인돼야 종료 (순간 전압 강하 무시)
     power_check_interval_s: float = 5.0
 
+    # ── 비전 F6·F7 (docs/features.md "F6·F7 비전 계획") ──
+    # pose 모델 .hef 경로 (.env POSE_HEF, 상대 경로면 model_dir 기준. 예: hailo8l/yolov8s_pose.hef).
+    # 모델은 벤치마크 후 선택(D-010) → 미정이면 None, 비전 기능 끔 (경고).
+    pose_hef: Path | None = None
+    camera_width: int = 640     # 640×480이면 모델 입력 640×640에 축소 없이 패딩만
+    camera_height: int = 480
+    # 검출 후처리. 임시값 (Ultralytics 기본에 가까움) → 벤치마크·누운 자세 측정 후 조정 (docs/todo.md)
+    pose_score_threshold: float = 0.5
+    pose_iou_threshold: float = 0.7
+    pose_max_people: int = 3
+
     # 주기 (docs/api.md)
     status_interval_s: float = 2.0
     pose_interval_s: float = 0.4
@@ -77,6 +88,10 @@ def load_settings(env_file: Path | None = None) -> Settings:
         load_dotenv(env_file or REPO_ROOT / ".env", override=False)
     env = os.environ
     data_dir = Path.home() / "pd-dog-data"
+    model_dir = Path(env.get("PD_DOG_MODEL_DIR") or Path.home() / "pd-dog-models")
+    pose_hef = Path(env["POSE_HEF"]) if env.get("POSE_HEF") else None
+    if pose_hef is not None and not pose_hef.is_absolute():
+        pose_hef = model_dir / pose_hef
     return Settings(
         mock_hardware=_bool(env.get("PD_DOG_MOCK_HARDWARE"), default=False),
         supabase_url=env.get("SUPABASE_URL") or None,
@@ -85,7 +100,8 @@ def load_settings(env_file: Path | None = None) -> Settings:
         esp32_serial_baud=_int(env.get("ESP32_SERIAL_BAUD"), 115200),
         queue_path=Path(env.get("PD_DOG_QUEUE_PATH") or data_dir / "outbox.db"),
         log_dir=Path(env.get("PD_DOG_LOG_DIR") or data_dir / "logs"),
-        model_dir=Path(env.get("PD_DOG_MODEL_DIR") or Path.home() / "pd-dog-models"),
+        model_dir=model_dir,
+        pose_hef=pose_hef,
         x1200_pld_power_ok_level=_opt_int(env.get("X1200_PLD_POWER_OK_LEVEL")),
         pi_shutdown_on_power_loss=_bool(env.get("PI_SHUTDOWN_ON_POWER_LOSS"), default=False),
     )

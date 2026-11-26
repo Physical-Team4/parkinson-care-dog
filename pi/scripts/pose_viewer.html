@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PD-Dog Pose Viewer</title>
+<style>
+  :root { --bg:#111418; --panel:#1b2027; --fg:#e6e9ee; --muted:#8b95a3; --ok:#3ccf7a; --mid:#f2c14e; --low:#e5534b; --box:#4aa8ff; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg); font:14px/1.45 system-ui, sans-serif; }
+  main { display:flex; gap:16px; padding:16px; flex-wrap:wrap; }
+  #wrap { flex:1 1 640px; min-width:0; }
+  canvas { width:100%; height:auto; background:#000; border-radius:8px; display:block; }
+  aside { flex:0 1 300px; background:var(--panel); border-radius:8px; padding:12px 14px; }
+  h1 { font-size:15px; margin:0 0 8px; }
+  .muted { color:var(--muted); }
+  .banner { background:var(--low); color:#fff; padding:6px 10px; border-radius:6px; margin-bottom:10px; font-weight:600; display:none; }
+  .err { color:var(--low); white-space:pre-wrap; }
+  table { width:100%; border-collapse:collapse; font-variant-numeric:tabular-nums; }
+  td { padding:2px 0; } td:last-child { text-align:right; }
+  .person { border-top:1px solid #2c333d; margin-top:8px; padding-top:8px; }
+  label { display:block; margin-top:12px; }
+  input[type=range] { width:100%; }
+  .legend span { display:inline-block; width:10px; height:10px; border-radius:50%; margin:0 4px 0 10px; vertical-align:middle; }
+</style>
+</head>
+<body>
+<main>
+  <div id="wrap"><canvas id="cv" width="640" height="480"></canvas></div>
+  <aside>
+    <div id="banner" class="banner">개발용 영상 모드 (저장 안 함, D-011)</div>
+    <h1>Pose Viewer</h1>
+    <div id="err" class="err"></div>
+    <table>
+      <tr><td class="muted">FPS</td><td id="fps">–</td></tr>
+      <tr><td class="muted">프레임 처리 ms</td><td id="ms">–</td></tr>
+      <tr><td class="muted">전처리 / 추론 / 후처리</td><td id="timing">–</td></tr>
+      <tr><td class="muted">사람 수</td><td id="n">–</td></tr>
+    </table>
+    <div id="people"></div>
+    <label>표시할 키포인트 최소 신뢰도 <b id="thv">0.30</b>
+      <input id="th" type="range" min="0" max="1" step="0.05" value="0.3"></label>
+    <p class="muted legend">키포인트:<span style="background:var(--ok)"></span>≥0.5<span style="background:var(--mid)"></span>그 미만</p>
+    <p class="muted">몸통 각도: 어깨 중점→엉덩이 중점이 수직선과 이루는 각 (0° 서 있음, 90° 누움). 표시용, 판정값 아님.</p>
+  </aside>
+</main>
+<script>
+const EDGES = [[15,13],[13,11],[16,14],[14,12],[11,12],[5,11],[6,12],[5,6],[5,7],[6,8],[7,9],[8,10],[1,2],[0,1],[0,2],[1,3],[2,4],[3,5],[4,6]];
+const cv = document.getElementById('cv'), ctx = cv.getContext('2d');
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const th = document.getElementById('th');
+th.oninput = () => document.getElementById('thv').textContent = (+th.value).toFixed(2);
+const img = new Image();
+
+function torsoAngle(k, t) {
+  const ok = i => k[i][2] >= t;
+  if (![5,6,11,12].every(ok)) return null;
+  const sx = (k[5][0]+k[6][0])/2, sy = (k[5][1]+k[6][1])/2, hx = (k[11][0]+k[12][0])/2, hy = (k[11][1]+k[12][1])/2;
+  const dx = (hx-sx)*cv.width, dy = (hy-sy)*cv.height;
+  return Math.abs(Math.atan2(dx, dy) * 180 / Math.PI);
+}
+
+function draw(d, video) {
+  if (cv.width !== d.w || cv.height !== d.h) { cv.width = d.w; cv.height = d.h; }
+  if (video && d.jpeg) ctx.drawImage(img, 0, 0, cv.width, cv.height);
+  else { ctx.fillStyle = '#000'; ctx.fillRect(0, 0, cv.width, cv.height); }
+  const t = +th.value, W = cv.width, H = cv.height;
+  const panel = document.getElementById('people'); panel.innerHTML = '';
+  d.people.forEach((p, idx) => {
+    const [x1,y1,x2,y2] = p.bbox;
+    ctx.strokeStyle = css('--box'); ctx.lineWidth = 2; ctx.strokeRect(x1*W, y1*H, (x2-x1)*W, (y2-y1)*H);
+    ctx.fillStyle = css('--box'); ctx.font = '14px system-ui';
+    ctx.fillText(`#${idx+1} ${p.score.toFixed(2)}`, x1*W + 4, Math.max(14, y1*H - 4));
+    const k = p.kpts;
+    ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+    for (const [a,b] of EDGES) {
+      if (k[a][2] < t || k[b][2] < t) continue;
+      ctx.beginPath(); ctx.moveTo(k[a][0]*W, k[a][1]*H); ctx.lineTo(k[b][0]*W, k[b][1]*H); ctx.stroke();
+    }
+    for (const [x,y,c] of k) {
+      if (c < t) continue;
+      ctx.fillStyle = c >= 0.5 ? css('--ok') : css('--mid');
+      ctx.beginPath(); ctx.arc(x*W, y*H, 4, 0, 7); ctx.fill();
+    }
+    const meanC = k.reduce((s, v) => s + v[2], 0) / k.length;
+    const ang = torsoAngle(k, t);
+    const bw = (x2-x1)*W, bh = (y2-y1)*H;
+    panel.insertAdjacentHTML('beforeend', `<div class="person"><b>#${idx+1}</b><table>
+      <tr><td class="muted">검출 점수</td><td>${p.score.toFixed(2)}</td></tr>
+      <tr><td class="muted">키포인트 평균 신뢰도</td><td>${meanC.toFixed(2)}</td></tr>
+      <tr><td class="muted">몸통 각도</td><td>${ang === null ? '–' : ang.toFixed(0) + '°'}</td></tr>
+      <tr><td class="muted">bbox 가로/세로</td><td>${(bw/bh).toFixed(2)}</td></tr></table></div>`);
+  });
+  document.getElementById('fps').textContent = d.fps;
+  document.getElementById('ms').textContent = d.ms;
+  const tm = d.timing || {};
+  document.getElementById('timing').textContent = 'infer_ms' in tm ? `${tm.pre_ms} / ${tm.infer_ms} / ${tm.post_ms}` : '–';
+  document.getElementById('n').textContent = d.people.length;
+}
+
+async function loop() {
+  let seq = 0;
+  for (;;) {
+    try {
+      const r = await (await fetch(`/latest?after=${seq}`, {cache: 'no-store'})).json();
+      document.getElementById('banner').style.display = r.video ? 'block' : 'none';
+      if (r.seq === seq) continue;
+      seq = r.seq;
+      const d = r.d;
+      if (d.error) { document.getElementById('err').textContent = 'Pi 추론 루프 오류: ' + d.error; await new Promise(s => setTimeout(s, 2000)); continue; }
+      document.getElementById('err').textContent = '';
+      if (r.video && d.jpeg) { img.src = 'data:image/jpeg;base64,' + d.jpeg; await img.decode(); }
+      draw(d, r.video);
+    } catch (e) {
+      document.getElementById('err').textContent = '연결 끊김: SSH 터널·뷰어 실행 확인 (' + e + ')';
+      await new Promise(s => setTimeout(s, 1000));
+    }
+  }
+}
+loop();
+</script>
+</body>
+</html>
