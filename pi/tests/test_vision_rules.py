@@ -1,0 +1,216 @@
+"""F6 낙상·F7 무움직임 판정 시나리오 테스트 (가짜 관절 시퀀스, 하드웨어 없음).
+
+임계값은 Settings 기본값(임시값) 그대로 쓴다 → 값을 바꾸면 이 테스트로 동작을 다시 확인.
+"""
+from datetime import datetime, timezone
+from pathlib import Path
+
+import numpy as np
+import pytest
+
+from pi.app.adapters import mock
+from pi.app.adapters.base import PersonPose
+from pi.app.config import Settings
+from pi.app.models.outbox import Outbox
+from pi.app.services.sync import SyncService
+from pi.app.services.vision.fall import FallConfig, FallDetector, classify
+from pi.app.services.vision.monitor import VisionMonitor
+from pi.app.services.vision.pose_features import extract, pick_primary
+
+ASPECT = 640 / 480
+T0 = datetime(2026, 11, 27, 3, 0, tzinfo=timezone.utc)
+S = Settings(mock_hardware=True, supabase_url=None, supabase_service_key=None, esp32_serial_port=None,
+             esp32_serial_baud=115200, queue_path=Path(":memory:"), log_dir=Path("."), model_dir=Path("."))
+
+# 자세별 관절 (x, y), 프레임 기준 0~1. 인덱스: 0 코, 5·6 어깨, 11·12 엉덩이, 13·14 무릎, 15·16 발목
+_PTS = {
+    "standing": ({0: (.50, .20), 5: (.47, .30), 6: (.53, .30), 11: (.48, .55), 12: (.52, .55),
+                  13: (.48, .75), 14: (.52, .75), 15: (.48, .95), 16: (.52, .95)}, (.42, .15, .58, .97)),
+    "sitting": ({0: (.50, .35), 5: (.47, .45), 6: (.53, .45), 11: (.48, .70), 12: (.52, .70),
+                 13: (.62, .70), 14: (.64, .70), 15: (.62, .90), 16: (.64, .90)}, (.42, .30, .68, .95)),
+    "floor_sit": ({0: (.50, .60), 5: (.47, .68), 6: (.53, .68), 11: (.48, .90), 12: (.52, .90),
+                   13: (.62, .88), 14: (.64, .88), 15: (.72, .92), 16: (.74, .92)}, (.42, .55, .78, .95)),
+    "lying": ({0: (.20, .85), 5: (.30, .84), 6: (.30, .86), 11: (.55, .84), 12: (.55, .86),
+               13: (.72, .84), 14: (.72, .86), 15: (.88, .84), 16: (.88, .86)}, (.15, .78, .92, .92)),
+}
+
+
+def pose(name, t=1.0, frm="standing", conf=0.9, dx=0.0, dy=0.0, score=0.9):
+    """frm → name 사이를 t(0~1)로 보간한 PersonPose. 정의 안 된 관절은 신뢰도 0.1."""
+    a_pts, a_box = _PTS[frm]
+    b_pts, b_box = _PTS[name]
+    k = np.zeros((17, 3), np.float32)
+    k[:, 2] = 0.1
+    for i in b_pts:
+        (ax, ay), (bx, by) = a_pts[i], b_pts[i]
+        k[i] = (ax + (bx - ax) * t + dx, ay + (by - ay) * t + dy, conf)
+    box = tuple(a + (b - a) * t + (dx if j % 2 == 0 else dy) for j, (a, b) in enumerate(zip(a_box, b_box)))
+    return PersonPose(box, score, k)
+
+
+def feats(p):
+    return extract(p, S.vision_kpt_min_conf, ASPECT)
+
+
+def timeline(*segments, fps=10):
+    """segments: (초, people 또는 t(0~1)→people 함수). [(now, people)] 생성."""
+    out, now = [], 0.0
+    for dur, src in segments:
+        n = int(round(dur * fps))
+        for i in range(n):
+            out.append((now, src((i + 1) / n) if callable(src) else src))
+            now += 1 / fps
+    return out
+
+
+def run_fall(frames, cfg=None):
+    det = FallDetector(cfg or FallConfig.from_settings(S))
+    states, alarms = [], []
+    for now, people in frames:
+        _, f = pick_primary(people, S.vision_kpt_min_conf, ASPECT)
+        u = det.update(f, now)
+        states.append(u.state)
+        if u.alarm:
+            alarms.append((now, u.alarm))
+    return states, alarms
+
+
+def make_monitor():
+    remote = mock.MockRemote()
+    sync = SyncService(Outbox(":memory:"), remote)
+    return VisionMonitor.from_settings(S, sync, clock=lambda: T0), remote
+
+
+STAND, SIT, LIE = [pose("standing")], [pose("sitting")], [pose("lying")]
+
+
+# ── 자세 분류 ──
+@pytest.mark.parametrize("name,expected", [("standing", "standing"), ("sitting", "sitting"),
+                                           ("floor_sit", "sitting"), ("lying", "lying")])
+def test_classify(name, expected):
+    assert classify(feats(pose(name)), FallConfig.from_settings(S)) == expected
+
+
+def test_torso_angle_uses_pixel_aspect():
+    assert feats(pose("standing")).torso_deg == pytest.approx(0, abs=1)
+    assert feats(pose("lying")).torso_deg == pytest.approx(90, abs=1)
+
+
+def test_partial_body_is_not_judged():
+    """팔만 보이는 경우 (어깨·엉덩이 없음) → 판정 불가."""
+    k = np.zeros((17, 3), np.float32)
+    k[[7, 9], :] = (0.3, 0.5, 0.9)
+    arm = PersonPose((0.0, 0.3, 0.8, 1.0), 0.68, k)
+    assert feats(arm) is None
+    person, f = pick_primary([arm], S.vision_kpt_min_conf, ASPECT)
+    assert person is arm and f is None
+
+
+# ── F6 ──
+def test_fall_then_lying_alarms_once():
+    frames = timeline((2, STAND), (0.5, lambda t: [pose("lying", t)]), (6, LIE))
+    states, alarms = run_fall(frames)
+    assert "falling" in states and states[-1] == "lying"
+    assert len(alarms) == 1
+    when, a = alarms[0]
+    assert a.path == "descent" and a.confidence == pytest.approx(0.9, abs=0.01)
+    assert 2.0 <= a.event_s <= 2.5                          # 쓰러지기 시작한 시각
+    assert when == pytest.approx(2.5 + S.fall_confirm_lying_s, abs=0.6)
+    assert a.detail["descent_ratio"] >= S.fall_descent_ratio
+
+
+def test_fast_sit_to_floor_no_alarm():
+    """머리가 크게 내려가도 앉은 자세로 끝나면 알람 없음 (털썩 앉기)."""
+    frames = timeline((2, STAND), (0.4, lambda t: [pose("floor_sit", t)]), (20, [pose("floor_sit")]))
+    states, alarms = run_fall(frames)
+    assert "falling" in states and alarms == [] and states[-1] == "sitting"
+
+
+def test_chair_sit_no_alarm():
+    _, alarms = run_fall(timeline((2, STAND), (0.8, lambda t: [pose("sitting", t)]), (30, SIT)))
+    assert alarms == []
+
+
+def test_lying_without_seen_fall_alarms_later_with_lower_conf():
+    states, alarms = run_fall(timeline((S.fall_lying_only_s + 2, LIE)))
+    assert len(alarms) == 1
+    when, a = alarms[0]
+    assert a.path == "lying_only" and when == pytest.approx(S.fall_lying_only_s, abs=0.2)
+    assert a.confidence == pytest.approx(S.fall_conf_lying_only * 0.9, abs=0.01)
+
+
+def test_lying_only_can_be_disabled():
+    cfg = FallConfig.from_settings(S)
+    cfg = FallConfig(**{**cfg.__dict__, "lying_only_s": None})
+    assert run_fall(timeline((120, LIE)), cfg)[1] == []
+
+
+def test_no_repeat_alarm_until_person_gets_up():
+    fall = ((2, STAND), (0.5, lambda t: [pose("lying", t)]), (40, LIE))
+    _, alarms = run_fall(timeline(*fall, (S.fall_rearm_upright_s + 2, STAND), *fall))
+    assert [a.path for _, a in alarms] == ["descent", "descent"]
+
+
+def test_brief_loss_keeps_lying_long_loss_resets():
+    _, alarms = run_fall(timeline((2, STAND), (0.5, lambda t: [pose("lying", t)]),
+                                  (1, LIE), (1, []), (3, LIE)))
+    assert len(alarms) == 1                                   # 1초 가려져도 이어서 확정
+    states, alarms = run_fall(timeline((2, LIE), (S.vision_lost_tolerance_s + 1, [])))
+    assert states[-1] == "none" and alarms == []
+
+
+# ── F7 ──
+def run_monitor(frames, mode="idle", esp32_ok=True):
+    mon, remote = make_monitor()
+    for now, people in frames:
+        mon.update(people, now, mode, esp32_ok)
+    return [op.payload for op in remote.executed]
+
+
+def jitter(seed=0):
+    rng = np.random.default_rng(seed)
+    return lambda t: [pose("sitting", dx=rng.uniform(-.004, .004), dy=rng.uniform(-.004, .004))]
+
+
+def test_no_motion_alarm_after_n_minutes():
+    n = S.no_motion_minutes * 60
+    sent = run_monitor(timeline((n - 5, jitter()), fps=2))
+    assert [p["p_source"] for p in sent] == []
+    sent = run_monitor(timeline((n + 5, jitter()), fps=2))
+    assert [p["p_source"] for p in sent] == ["no_motion"]
+    assert sent[0]["p_confidence"] is None and sent[0]["p_detail"]["still_min"] >= S.no_motion_minutes
+
+
+def test_movement_restarts_no_motion_timer():
+    n = S.no_motion_minutes * 60
+    moved = [pose("sitting", dx=0.1)]
+    sent = run_monitor(timeline((n / 2, jitter()), (1, moved), (n - 10, [pose("sitting", dx=0.1)]), fps=2))
+    assert sent == []
+
+
+@pytest.mark.parametrize("mode,ok", [("walking", True), ("idle", False), (None, True)])
+def test_no_motion_paused_when_robot_moving_or_unknown(mode, ok):
+    assert run_monitor(timeline((S.no_motion_minutes * 60 + 30, jitter()), fps=2), mode, ok) == []
+
+
+def test_absent_person_resets_no_motion_but_short_gap_does_not():
+    n = S.no_motion_minutes * 60
+    gap_long = S.no_motion_absent_reset_s + 5
+    assert run_monitor(timeline((n / 2, jitter()), (gap_long, []), (n / 2, jitter(1)), fps=2)) == []
+    sent = run_monitor(timeline((n / 2, jitter()), (3, []), (n / 2 + 5, jitter(1)), fps=2))
+    assert [p["p_source"] for p in sent] == ["no_motion"]
+
+
+# ── 묶음 ──
+def test_monitor_sends_camera_alert_and_pose():
+    mon, remote = make_monitor()
+    frames = timeline((2, STAND), (0.5, lambda t: [pose("lying", t)]), (5, LIE))
+    for now, people in frames:
+        p = mon.update(people, now, "idle", True)
+    assert p.state == "lying" and len(p.to_json()["keypoints"]) == 17
+    [op] = remote.executed
+    assert op.target == "report_alert" and op.payload["p_source"] == "camera"
+    assert 0 < op.payload["p_confidence"] <= 1
+    assert op.payload["p_occurred_at"] < T0.isoformat()      # 쓰러지기 시작한 시각 (확정보다 이전)
+    assert "keypoints" not in op.payload["p_detail"]          # 키포인트 이력 금지
+    assert mon.update([], frames[-1][0] + 10, "idle", True).to_json() == {"state": "none", "keypoints": []}

@@ -40,7 +40,11 @@
 | pose 검출 점수·NMS 임계값 | 임시 0.5 / 0.7 (`pi/app/config.py`). 누운 자세 측정 후 조정 | A | `hailo` adapter |
 | picamera2 채널 순서 | `BGR888` = numpy RGB로 가정 (picamera2 문서). Pi에서 빨간 물체로 확인 필요 | A | 모델 입력 색 |
 | 카메라 각도·거리 조정 테스트 | 학습 전에 카메라 각도, 사용자 거리 2~3m, 입력 해상도로 누운 자세 인식률 확인 ([features.md](features.md#f6f7-비전-계획)) | A | F6·F7, 카메라 장착 위치 |
-| F6·F7 판정 임계값 | 하강 속도·몸통 각도·누운 지속 시간, 무움직임 N분·이동량 임계값 → 실측 후 `pi/app/config.py` | A | F6·F7 |
+| F6·F7 판정 임계값 | 구현됨, 값은 임시 (`pi/app/config.py`의 `fall_*`·`no_motion_*`·`vision_*`). 뷰어로 서기·앉기·눕기·넘어짐(매트) 연기하며 조정 | A | F6·F7 |
+| F6 알려진 한계 | 카메라 방향으로 누움(몸통 짧게 보임), 엉덩방아 낙상(앉음으로 끝남), 로봇 보행 중 카메라 흔들림 → 실측 후 대응 결정 | A | F6 |
+| `lying_only` 알람 | 쓰러지는 장면 없이 60초 누우면 알람(낮은 confidence). 낮잠·소파에 눕기도 알람 가능 → 실사용 장소 보고 유지/시간 조정/끄기 결정 | A | F6 오알람 |
+| 여러 사람이 보일 때 | 지금은 검출 점수 1등만 판정. 보호자와 환자 구분 방법 미정 | A | F6·F7 |
+| 비전 루프 main.py 연결 | `VisionMonitor`를 카메라·Hailo와 메인 루프에 연결, 0.4초 포즈 전송. `main.py`는 B 담당 → 먼저 알리고 진행 | A·B | F6·F7 동작 |
 | 로봇 이동 모드 목록 | F7은 이동 중 모드에서 누적 중단. 지금 프로토콜 이동 모드는 `walking`뿐. `approaching` 등 추가되면 [serial-protocol.md](serial-protocol.md) `mode`와 `pi/app/config.py` 목록에 같이 반영 | A·C·D | F7 |
 | 대시보드 기술 스택 | 대시보드 README 확인 필요 | D | Supabase 클라이언트 |
 | environment.yml 새 패키지의 aarch64 + Python 3.13 설치 | 지금 목록은 Pi에서 설치 확인됨 (2026-11-26). 앞으로 추가할 패키지(onnxruntime, ultralytics 등)는 추가할 때 Pi에서 `conda env update` 확인 | A·B | `environment.yml` |
