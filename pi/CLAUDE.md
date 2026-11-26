@@ -13,5 +13,6 @@
 - 알람은 발생 시각(`occurred_at`, timezone-aware UTC)을 반드시 넣는다.
 - 대시보드로 보내는 데이터 형식은 `app/views/api_schemas.py`(Supabase), ESP32 메시지는 `app/views/serial_messages.py`. 필드 이름은 [docs/api.md](../docs/api.md), [docs/serial-protocol.md](../docs/serial-protocol.md)와 일치해야 한다.
 - 카메라 프레임은 메모리에서 처리 후 버린다. 파일로 쓰지 말 것 (디버그 저장도 커밋 금지 + 기본 꺼짐).
+  화면 전송은 개발용 `scripts/pose_viewer.py --video`만 예외 (D-011). `pi.main`에서 import하지 말 것.
 - dB 측정·음성 인식 전에 ESP32 `stop`을 보내고 ack를 확인.
 - `picamera2`, `hailo_platform`은 Pi에서만 import 가능할 수 있다 → adapter 안에서 지연 import.

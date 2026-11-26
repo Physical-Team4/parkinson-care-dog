@@ -7,7 +7,7 @@ from typing import Any
 
 import numpy as np
 
-from pi.app.adapters.base import RemoteError
+from pi.app.adapters.base import PersonPose, RemoteError
 from pi.app.views import serial_messages as sm
 from pi.app.views.api_schemas import Op
 
@@ -67,11 +67,34 @@ class MockRemote:
 
 
 class MockCamera:
-    def __init__(self, width: int = 320, height: int = 320) -> None:
+    def __init__(self, width: int = 640, height: int = 480) -> None:
         self.shape = (height, width, 3)
+        self.closed = False
 
     def capture(self) -> np.ndarray:
         return np.zeros(self.shape, dtype=np.uint8)
+
+    def close(self) -> None:
+        self.closed = True
+
+
+class MockPoseEstimator:
+    """정해 둔 결과를 차례로 돌려준다 (다 쓰면 마지막 것 반복). 기본은 사람 없음."""
+
+    def __init__(self, results: list[list[PersonPose]] | None = None,
+                 input_size: tuple[int, int] = (640, 640)) -> None:
+        self.results = results or [[]]
+        self.input_size = input_size
+        self.calls = 0
+        self.closed = False
+
+    def infer(self, frame: np.ndarray) -> list[PersonPose]:
+        r = self.results[min(self.calls, len(self.results) - 1)]
+        self.calls += 1
+        return r
+
+    def close(self) -> None:
+        self.closed = True
 
 
 class MockMicrophone:

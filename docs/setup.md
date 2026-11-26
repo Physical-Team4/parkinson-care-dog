@@ -113,6 +113,41 @@ d = VDevice(); print('hailo ok'); d.release()
 - **`.hef`는 hailo8l 대상으로 컴파일된 것만 사용한다.** Hailo-8(26T)용 `.hef`는 Hailo-8L에서 로드되지 않거나
   제대로 동작하지 않는다. Model Zoo에서 받을 때도 `hailo8l` 폴더·파일을 고르고, DFC로 변환할 때도 대상 `hailo8l`.
 
+### 2-3-2. pose 모델 받기·벤치마크 (담당 A)
+가중치(`.hef`)는 레포에 넣지 않고 `~/pd-dog-models/hailo8l/`에 받는다 (`PD_DOG_MODEL_DIR`로 바꿀 수 있음).
+
+**Model Zoo 버전 고르기**: Hailo-8L용 기성 모델은 Model Zoo **v2.x** 브랜치에 있다 (master v5.x는 Hailo-10/15 전용).
+`.hef`는 컴파일한 DFC 버전에 따라 설치된 HailoRT에서 안 열릴 수 있는데, 공식 문서에 HailoRT 4.23 ↔ Model Zoo 버전
+대응표가 없다 (CHANGELOG는 v2.15 = HailoRT 4.21까지만 적혀 있음, 2026-11-26 확인). 그래서 실제로 열어 보고 고른다:
+```bash
+bash pi/scripts/download_models.sh --probe                 # 버전별 yolov8s_pose를 받아 hailortcli parse-hef로 열어 봄
+MZ_VERSION=v2.xx.0 bash pi/scripts/download_models.sh      # ✅ 나온 가장 높은 버전으로 yolov8s_pose, yolov8m_pose 받기
+```
+- 받은 파일마다 `parse-hef`로 열리는지·대상이 HAILO8L인지 확인하고, 출처 URL·sha256을 `SOURCES.txt`에 남긴다.
+- `.env`에 `POSE_HEF=hailo8l/yolov8s_pose.hef` (모델 선택 전에는 비워 둠 → 비전 끔).
+- 결과: (`--probe`로 열린 버전, 고른 버전 기록)
+
+**벤치마크** (레포 루트, `pd-dog` 환경) → 출력 마지막 줄을 [benchmarks.md](benchmarks.md) 표에 붙인다:
+```bash
+hailortcli run ~/pd-dog-models/hailo8l/yolov8s_pose.hef                          # (참고) 칩 단독 FPS
+python -m pi.scripts.bench_pose --hef ~/pd-dog-models/hailo8l/yolov8s_pose.hef   # 60초: FPS·지연
+python -m pi.scripts.bench_pose --hef ~/pd-dog-models/hailo8l/yolov8s_pose.hef --seconds 600   # 10분: 발열
+```
+- 카메라 기본 640×480 (모델 입력 640×640에 위아래 패딩만). 프레임은 메모리에서 처리 후 버리고 파일로 쓰지 않는다.
+- 첫 실행 로그의 `pose 출력 sigmoid 적용: cls=… kpt_conf=…`와 출력 shape을 기록해 둔다 (모델 버전마다 다를 수 있음).
+
+**개발용 뷰어** — 노트북 브라우저에서 인식 결과를 실시간으로 본다 (영상 예외 범위: [decisions.md](decisions.md) D-011):
+```bash
+# Pi
+python -m pi.scripts.pose_viewer --hef ~/pd-dog-models/hailo8l/yolov8s_pose.hef           # 뼈대만 (검은 배경)
+python -m pi.scripts.pose_viewer --hef ~/pd-dog-models/hailo8l/yolov8s_pose.hef --video   # 카메라 화면 + 뼈대
+# 노트북 (다른 터미널, 켜 둔 채로)
+ssh -L 8765:127.0.0.1:8765 <user>@<pi 주소>
+# 브라우저: http://localhost:8765
+```
+- 화면 옆에 FPS, 단계별 ms, 사람별 검출 점수·키포인트 평균 신뢰도·몸통 각도·bbox 비율이 나온다 (표시용).
+- 끝낼 때 Pi에서 Ctrl+C. 화면 저장·녹화 기능은 없다.
+
 ### 2-4. ESP32 시리얼 포트 고정 (TODO)
 `/dev/ttyUSB0` 번호가 바뀔 수 있으니 udev 규칙으로 `/dev/pd-dog-esp32` 고정 예정.
 `udevadm info -a /dev/ttyUSB0`로 idVendor/idProduct 확인 후 `/etc/udev/rules.d/99-pd-dog.rules` 작성.
