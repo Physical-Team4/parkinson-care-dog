@@ -15,19 +15,22 @@ log = logging.getLogger(__name__)
 
 
 class PiCamera:
-    def __init__(self, size: tuple[int, int] = (640, 480)) -> None:
-        from picamera2 import Picamera2  # Pi에서만 있음
+    def __init__(self, size: tuple[int, int] = (640, 480), hflip: bool = False, vflip: bool = False) -> None:
+        """hflip·vflip: 카메라 장착 방향 보정 (Settings camera_hflip/vflip). 거꾸로 달았으면 둘 다 True(180° 회전)."""
+        from libcamera import Transform  # Pi에서만 있음
+        from picamera2 import Picamera2
 
         self.size = size
         self._cam = Picamera2()
         try:
-            cfg = self._cam.create_video_configuration(main={"size": size, "format": "BGR888"})
+            cfg = self._cam.create_video_configuration(main={"size": size, "format": "BGR888"},
+                                                       transform=Transform(hflip=int(hflip), vflip=int(vflip)))
             self._cam.configure(cfg)
             self._cam.start()
         except Exception:
             self._cam.close()
             raise
-        log.info("camera %dx%d 시작", *size)
+        log.info("camera %dx%d 시작 (hflip=%s vflip=%s)", *size, hflip, vflip)
 
     def capture(self) -> np.ndarray:
         """RGB (H, W, 3) uint8. 호출한 쪽이 처리 후 바로 버린다."""

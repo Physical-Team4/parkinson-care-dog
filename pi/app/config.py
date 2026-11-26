@@ -66,6 +66,9 @@ class Settings:
     pose_hef: Path | None = None
     camera_width: int = 640     # 640×480이면 모델 입력 640×640에 축소 없이 패딩만
     camera_height: int = 480
+    # 카메라 장착 방향 보정 (.env CAMERA_HFLIP / CAMERA_VFLIP). 거꾸로 달았으면 둘 다 true = 180° 회전
+    camera_hflip: bool = False
+    camera_vflip: bool = False
     # 검출 후처리. 임시값 (Ultralytics 기본에 가까움) → 벤치마크·누운 자세 측정 후 조정 (docs/todo.md)
     pose_score_threshold: float = 0.5
     pose_iou_threshold: float = 0.7
@@ -102,6 +105,8 @@ def load_settings(env_file: Path | None = None) -> Settings:
         log_dir=Path(env.get("PD_DOG_LOG_DIR") or data_dir / "logs"),
         model_dir=model_dir,
         pose_hef=pose_hef,
+        camera_hflip=_bool(env.get("CAMERA_HFLIP"), default=False),
+        camera_vflip=_bool(env.get("CAMERA_VFLIP"), default=False),
         x1200_pld_power_ok_level=_opt_int(env.get("X1200_PLD_POWER_OK_LEVEL")),
         pi_shutdown_on_power_loss=_bool(env.get("PI_SHUTDOWN_ON_POWER_LOSS"), default=False),
     )

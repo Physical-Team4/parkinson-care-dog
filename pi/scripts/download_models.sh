@@ -43,7 +43,7 @@ check_hef() {
 
 if [ "${1:-}" = "--probe" ]; then
   echo "HailoRT: $(hailortcli --version 2>/dev/null | head -n 1)"
-  echo "장치: $(hailortcli fw-control identify 2>/dev/null | grep -i 'architecture' | head -n 1)"
+  echo "장치: $(hailortcli fw-control identify 2>/dev/null | grep -ai 'architecture' | head -n 1)"
   tmp=$(mktemp -d)
   trap 'rm -rf "$tmp"' EXIT
   for v in $PROBE_VERSIONS; do
