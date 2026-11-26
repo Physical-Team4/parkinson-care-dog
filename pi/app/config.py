@@ -97,11 +97,20 @@ class Settings:
     fall_conf_slow: float = 0.9
     # 눕는 과정을 못 봤는데 누운 자세가 이만큼 이어지면 알람 (낮은 confidence). None=끔
     fall_lying_only_s: float | None = 60.0
+    # 마지막 상태 기억: 사람을 놓쳐도 이 시간 동안 마지막 상태(쉬며 누움/서 있음 등)를 기억
+    vision_context_memory_s: float = 1800.0
+    # 마지막에 서 있던 사람이 (과정을 못 봤는데) 누워 있으면 → 이 시간 후 알람 (넘어졌을 가능성 높음)
+    fall_unseen_after_standing_s: float = 10.0
+    fall_conf_unseen_standing: float = 0.8
     fall_conf_descent: float = 1.0          # confidence = 이 가중치 × 핵심 관절 평균 신뢰도
     fall_conf_lying_only: float = 0.6
     fall_rearm_upright_s: float = 5.0       # 알람 후 이만큼 일어서/앉아 있어야 다음 낙상 알람 가능
     # F7 무움직임
-    no_motion_minutes: float = 10.0         # 이 시간 동안 움직임이 없으면 알람
+    # 자세별: 이 시간 동안 움직임이 없으면 알람. None=그 자세에서는 알람 안 함
+    no_motion_minutes: float = 10.0                 # 그 외 (누움 등, 쉬는 중이 아닌 경우)
+    no_motion_minutes_standing: float = 5.0         # 서서 굳어 있음은 짧게
+    no_motion_minutes_sitting: float = 30.0         # TV·독서 고려
+    no_motion_minutes_resting: float | None = None  # 스스로 누워 쉬는 중(잠) → 끔
     no_motion_threshold: float = 0.05       # 기준 자세 대비 관절 평균 이동 (bbox 높이 비율) > 이 값 → 움직임
     no_motion_absent_reset_s: float = 10.0  # 사람 없음/판정 불가가 이보다 길면 누적 초기화
     no_motion_min_common_kpts: int = 4      # 이동량 계산에 필요한 공통 관절 수

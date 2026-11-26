@@ -103,7 +103,7 @@ function draw(d, video) {
   if (j) {
     const st = document.getElementById('state');
     const LABEL = {none: '사람 없음/판정 불가', standing: '서 있음', sitting: '앉음', falling: '쓰러짐 의심', lying: '누움'};
-    st.textContent = `${LABEL[j.state] || j.state} (${j.state})`;
+    st.textContent = `${LABEL[j.state] || j.state} (${j.state})` + (j.resting ? ' · 쉬는 중' : '');
     st.style.color = j.state === 'falling' ? css('--mid') : j.state === 'lying' ? css('--low') : '';
     document.getElementById('still').textContent = `${j.still_s}초`;
     document.getElementById('alarms').innerHTML = j.alarms.length

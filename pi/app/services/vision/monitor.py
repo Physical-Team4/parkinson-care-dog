@@ -64,7 +64,8 @@ class VisionMonitor:
             self.sync.submit(AlertReport("camera", self._occurred_at(now_s, a.event_s),
                                          confidence=a.confidence, detail=a.detail).to_op())
 
-        nm = self.no_motion.update(feats, now_s, self.robot_moving(robot_mode, esp32_ok))
+        context = "resting" if self.fall.resting else fu.state
+        nm = self.no_motion.update(feats, now_s, self.robot_moving(robot_mode, esp32_ok), context)
         if nm:
             log.warning("F7 무움직임 알람 %s", nm.detail)
             self.sync.submit(AlertReport("no_motion", self._occurred_at(now_s, nm.event_s),

@@ -7,10 +7,16 @@
                 (서 있다가 천천히 무너짐, 의자에서 미끄러짐) → 누운 자세 N초 유지 → 알람
      ─ 스스로 눕기: 눕는 과정을 봤는데 엉덩이 높이가 거의 그대로 (소파·침대·바닥 요에 앉았다가 눕기) → 알람 없음
   3) lying_only 눕는 과정을 못 봤는데 누운 자세가 오래 이어짐 → 낮은 confidence로 알람
+     ─ 마지막 상태 기억 (context_memory_s 동안, 사람을 놓쳐도 유지):
+       마지막에 "쉬며 누움"이었으면 → 계속 쉬는 중 (알람 없음)
+       마지막에 서 있었으면 → 그 사이 넘어졌을 가능성 높음 → unseen_after_standing_s 후 알람
 
 - 높이·하강은 픽셀이 아니라 **사람 크기(bbox 높이, 몸통 길이) 대비 비율** → 거리와 무관.
 - 기준 자세 = 앉기 또는 서기를 settle_s 이상 유지한 구간에서 엉덩이가 가장 높았던 때.
   (천천히 무너지는 도중 잠깐 웅크린 자세는 settle_s를 못 채워 기준이 되지 않는다)
+  단, 일어서서 엉덩이가 기준보다 높아지면 settle_s를 기다리지 않고 바로 기준을 올린다
+  (요에서 일어나자마자 쓰러지는 경우를 "스스로 눕기"로 놓치지 않도록).
+- resting(쉬는 중) = 엉덩이 그대로 스스로 누웠거나, 기억상 쉬던 사람이 계속 누워 있음 → F7이 잠으로 본다.
 - 판정 불가 프레임(어깨·엉덩이가 안 보임)은 lost_tolerance_s 동안 직전 상태를 유지하고, 넘으면 "none".
 - 알람 후에는 일어서거나 앉은 상태가 rearm_upright_s 이어져야 다음 알람이 가능 (같은 낙상으로 반복 알람 안 함).
 알려진 한계 (실측으로 확인할 것, docs/todo.md):
@@ -45,6 +51,9 @@ class FallConfig:
     slow_hip_drop_ratio: float
     slow_confirm_s: float
     lying_only_s: float | None
+    context_memory_s: float
+    unseen_after_standing_s: float
+    conf_unseen_standing: float
     conf_descent: float
     conf_slow: float
     conf_lying_only: float
@@ -59,7 +68,9 @@ class FallConfig:
             confirm_window_s=s.fall_confirm_window_s, confirm_lying_s=s.fall_confirm_lying_s,
             settle_s=s.fall_settle_s, onset_max_gap_s=s.fall_onset_max_gap_s,
             slow_hip_drop_ratio=s.slow_fall_hip_drop_ratio, slow_confirm_s=s.slow_fall_confirm_s,
-            lying_only_s=s.fall_lying_only_s, conf_descent=s.fall_conf_descent,
+            lying_only_s=s.fall_lying_only_s, context_memory_s=s.vision_context_memory_s,
+            unseen_after_standing_s=s.fall_unseen_after_standing_s,
+            conf_unseen_standing=s.fall_conf_unseen_standing, conf_descent=s.fall_conf_descent,
             conf_slow=s.fall_conf_slow, conf_lying_only=s.fall_conf_lying_only,
             rearm_upright_s=s.fall_rearm_upright_s,
         )
@@ -77,6 +88,16 @@ class FallAlarm:
 class FallUpdate:
     state: State
     alarm: FallAlarm | None = None
+
+
+@dataclass(frozen=True)
+class _Seen:
+    """사람을 놓치기 직전 상태."""
+    kind: str          # "rest" / "standing" / "sitting" / "lying"
+    t: float
+    hip_y: float
+    cx: float          # bbox 가로 중심 (0~1)
+    torso_len: float
 
 
 @dataclass(frozen=True)
@@ -120,6 +141,16 @@ class FallDetector:
         self._onset_ref: _Ref | None = None         # 이번 누움 직전의 기준 자세 (못 봤으면 None)
         self._onset_s = 0.0
         self._hip_drop = 0.0
+        # 쉬는 중 / 마지막 상태 기억 (_reset_tracking에서도 지우지 않음)
+        self._resting = False
+        self._last_seen: _Seen | None = None
+        self._last_f: PoseFeatures | None = None
+        self._unseen_from: str | None = None                # 이번 누움을 못 봤을 때, 기억상 마지막 상태
+
+    @property
+    def resting(self) -> bool:
+        """스스로 누워 쉬는 중(잠). F7이 자세별 기준 시간을 고를 때 쓴다."""
+        return self._resting
 
     def _descent_ratio(self, now: float, head_y: float) -> float:
         """descent_window_s 안의 머리 하강 / 키. 키는 그 시점 bbox 높이와 기준 자세(유지된 서기·앉기)의 bbox 높이 중
@@ -131,6 +162,11 @@ class FallDetector:
         return max((head_y - y0) / max(h0, up_h) for _, y0, h0 in self._hist) if self._hist else 0.0
 
     def _reset_tracking(self) -> None:
+        if self._posture is not None and self._last_f is not None:   # 놓치기 직전 상태를 기억
+            f = self._last_f
+            self._last_seen = _Seen("rest" if self._resting else self._posture, self._last_valid_s,
+                                    f.hip_y, f.bbox_cx, f.torso_len)
+        self._resting = False
         self._hist.clear()
         self._posture = None
         self._lying_since = None
@@ -147,6 +183,8 @@ class FallDetector:
             if self._seg_ref is None or f.hip_y < self._seg_ref.hip_y:   # y가 작을수록 높음
                 self._seg_ref = _Ref(f.hip_y, f.torso_len, posture, f.bbox_h)
             self._ref = self._seg_ref
+        if self._ref is not None and f.hip_y < self._ref.hip_y:   # 일어섬 → 기준을 바로 올림
+            self._ref = _Ref(f.hip_y, f.torso_len, posture, f.bbox_h)
         self._last_upright_s = now
         # 엉덩이가 아직 기준 높이 근처(느린 낙상 기준의 1/4 이내)면 "기준 자세에 있던 마지막 시각" 갱신
         r = self._ref
@@ -161,6 +199,19 @@ class FallDetector:
         self._onset_ref = self._ref if seen else None
         self._onset_s = self._ref_last_s if seen else now
         self._hip_drop = 0.0
+        self._unseen_from = None
+        m = self._last_seen
+        if not seen and m is not None and now - m.t <= self.cfg.context_memory_s:
+            self._unseen_from = m.kind
+            if m.kind == "rest":
+                # 같은 자리(화면 위치·엉덩이 높이가 비슷)일 때만 계속 쉬는 중으로 본다.
+                # 자리가 다르면 그 사이 일어났다 쓰러졌을 수 있음 → 기억을 쓰지 않음 (로봇이 움직인 경우도 안전한 쪽)
+                f = self._last_f
+                tol = self.cfg.slow_hip_drop_ratio * m.torso_len
+                same = f is not None and abs(f.hip_y - m.hip_y) < tol and abs(f.bbox_cx - m.cx) < tol
+                self._resting = same
+                if not same:
+                    self._unseen_from = "lying"
 
     def _slow_pending(self) -> bool:
         return (not self._alarmed and self._lying_since is not None and self._onset_ref is not None
@@ -177,7 +228,7 @@ class FallDetector:
                 return FallUpdate("none")
             posture = self._posture   # 잠깐 안 보임 → 직전 자세 유지, 타이머는 계속
         else:
-            self._last_valid_s = now
+            self._last_valid_s, self._last_f = now, f
             posture = classify(f, cfg)
             self._posture = posture
             descent = self._descent_ratio(now, f.head_y)
@@ -195,6 +246,7 @@ class FallDetector:
                 self._upright_since = None
             else:
                 self._lying_since = None
+                self._resting = False
                 self._track_upright(f, posture, now)
                 if self._upright_since is None:
                     self._upright_since = now
@@ -234,8 +286,15 @@ class FallDetector:
                 return FallAlarm("slow_fall", min(1.0, cfg.conf_slow * mean_conf), self._onset_s,
                                  {"path": "slow_fall", "hip_drop": round(self._hip_drop, 2),
                                   "from": ref.posture, **detail})
+            if self._hip_drop < cfg.slow_hip_drop_ratio and lying_s >= cfg.slow_confirm_s:
+                self._resting = True   # 엉덩이 그대로 스스로 누움 → 쉬는 중
             return None
+        if self._resting:      # 기억상 쉬던 사람이 계속 누워 있음
+            return None
+        if self._unseen_from == "standing" and lying_s >= cfg.unseen_after_standing_s:
+            return FallAlarm("lying_only", min(1.0, cfg.conf_unseen_standing * mean_conf), ls,
+                             {"path": "lying_only", "last_seen": "standing", **detail})
         if cfg.lying_only_s is not None and lying_s >= cfg.lying_only_s:
             return FallAlarm("lying_only", min(1.0, cfg.conf_lying_only * mean_conf), ls,
-                             {"path": "lying_only", **detail})
+                             {"path": "lying_only", "last_seen": self._unseen_from or "unknown", **detail})
         return None

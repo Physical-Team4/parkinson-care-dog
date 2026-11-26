@@ -176,16 +176,16 @@ def jitter(seed=0):
 
 
 def test_no_motion_alarm_after_n_minutes():
-    n = S.no_motion_minutes * 60
+    n = S.no_motion_minutes_sitting * 60
     sent = run_monitor(timeline((n - 5, jitter()), fps=2))
     assert [p["p_source"] for p in sent] == []
     sent = run_monitor(timeline((n + 5, jitter()), fps=2))
     assert [p["p_source"] for p in sent] == ["no_motion"]
-    assert sent[0]["p_confidence"] is None and sent[0]["p_detail"]["still_min"] >= S.no_motion_minutes
+    assert sent[0]["p_confidence"] is None and sent[0]["p_detail"]["still_min"] >= S.no_motion_minutes_sitting
 
 
 def test_movement_restarts_no_motion_timer():
-    n = S.no_motion_minutes * 60
+    n = S.no_motion_minutes_sitting * 60
     moved = [pose("sitting", dx=0.1)]
     sent = run_monitor(timeline((n / 2, jitter()), (1, moved), (n - 10, [pose("sitting", dx=0.1)]), fps=2))
     assert sent == []
@@ -193,11 +193,11 @@ def test_movement_restarts_no_motion_timer():
 
 @pytest.mark.parametrize("mode,ok", [("walking", True), ("idle", False), (None, True)])
 def test_no_motion_paused_when_robot_moving_or_unknown(mode, ok):
-    assert run_monitor(timeline((S.no_motion_minutes * 60 + 30, jitter()), fps=2), mode, ok) == []
+    assert run_monitor(timeline((S.no_motion_minutes_sitting * 60 + 30, jitter()), fps=2), mode, ok) == []
 
 
 def test_absent_person_resets_no_motion_but_short_gap_does_not():
-    n = S.no_motion_minutes * 60
+    n = S.no_motion_minutes_sitting * 60
     gap_long = S.no_motion_absent_reset_s + 5
     assert run_monitor(timeline((n / 2, jitter()), (gap_long, []), (n / 2, jitter(1)), fps=2)) == []
     sent = run_monitor(timeline((n / 2, jitter()), (3, []), (n / 2 + 5, jitter(1)), fps=2))
@@ -273,3 +273,88 @@ def test_unseen_onset_still_uses_lying_only():
     """오래 사람을 놓쳤다가(기준 자세 초기화) 누운 상태로 발견 → lying_only."""
     _, alarms = run_fall(timeline((SETTLE, SIT), (S.vision_lost_tolerance_s + 2, []), (S.fall_lying_only_s + 2, LIE)))
     assert [a.path for _, a in alarms] == ["lying_only"]
+
+
+# ── 일어나자마자 쓰러짐 (기준 자세 바로 올림) ──
+def test_rise_from_floor_then_fall_immediately_alarms():
+    """요에 앉아 있다가(기준=바닥 앉음) 일어서서 2초 만에 쓰러짐 → 기준이 서 있는 높이로 올라가 있어 알람."""
+    _, alarms = run_fall(timeline((SETTLE, [pose("floor_sit")]), (1.5, lambda t: [pose("standing", t, frm="floor_sit")]),
+                                  (2, STAND), (0.5, lambda t: [pose("lying", t)]), (8, LIE)))
+    assert len(alarms) == 1 and alarms[0][1].path in ("descent", "slow_fall")
+
+
+def test_stand_up_from_sofa_and_flop_back_within_settle_alarms():
+    """소파에서 일어섰다가 5초 안에 다시 털썩 눕기 → 기준이 서 있는 높이 → 알람 (안전한 쪽 오알람, 의도된 동작)."""
+    _, alarms = run_fall(timeline((SETTLE, SIT), (1, lambda t: [pose("standing", t, frm="sitting")]), (2, STAND),
+                                  (0.5, lambda t: [pose("sofa_lying", t)]), (8, [pose("sofa_lying")])))
+    assert len(alarms) == 1
+
+
+# ── 마지막 상태 기억 ──
+def sofa_rest(extra=10):
+    return ((SETTLE, SIT), (3, lambda t: [pose("sofa_lying", t, frm="sitting")]),
+            (S.slow_fall_confirm_s + extra, [pose("sofa_lying")]))
+
+
+def test_rest_on_sofa_sets_resting():
+    det = FallDetector(FallConfig.from_settings(S))
+    for now, people in timeline(*sofa_rest()):
+        det.update(pick_primary(people, S.vision_kpt_min_conf, ASPECT)[1], now)
+    assert det.resting
+
+
+def test_found_again_resting_same_spot_no_alarm():
+    """소파에서 쉬다가 로봇이 5분 놓침 → 다시 보니 같은 자리에 누워 있음 → 계속 쉬는 중, 알람 없음."""
+    states, alarms = run_fall(timeline(*sofa_rest(), (300, []), (S.fall_lying_only_s + 60, [pose("sofa_lying")])))
+    assert alarms == [] and states[-1] == "lying"
+
+
+def test_found_lying_elsewhere_after_rest_alarms():
+    """쉬다가 놓친 사이 자리가 바뀜 → 기억을 쓰지 않고 lying_only.
+    다른 자리 = 엉덩이 높이 차이가 몸통 길이의 절반 이상 (소파 약 40cm vs 몸통 약 50cm)."""
+    floor = [pose("lying", dy=0.08)]
+    _, alarms = run_fall(timeline(*sofa_rest(), (300, []), (S.fall_lying_only_s + 2, floor)))
+    assert [a.path for _, a in alarms] == ["lying_only"]
+
+
+def test_rest_memory_expires():
+    gap = S.vision_context_memory_s + 10
+    _, alarms = run_fall(timeline(*sofa_rest(), (gap, []), (S.fall_lying_only_s + 2, [pose("sofa_lying")]), fps=2))
+    assert [(a.path, a.detail["last_seen"]) for _, a in alarms] == [("lying_only", "unknown")]
+
+
+def test_last_seen_standing_then_found_lying_alarms_fast():
+    """서 있던 사람을 놓쳤다가 다시 보니 누워 있음 → 10초 후 알람 (60초 기다리지 않음)."""
+    _, alarms = run_fall(timeline((SETTLE, STAND), (S.vision_lost_tolerance_s + 3, []),
+                                  (S.fall_unseen_after_standing_s + 2, LIE)))
+    assert len(alarms) == 1
+    when, a = alarms[0]
+    assert a.detail["last_seen"] == "standing" and a.confidence == pytest.approx(S.fall_conf_unseen_standing * 0.9, abs=.01)
+
+
+def test_last_seen_sitting_then_found_lying_uses_normal_wait():
+    _, alarms = run_fall(timeline((SETTLE, SIT), (S.vision_lost_tolerance_s + 3, []), (30, LIE)))
+    assert alarms == []
+
+
+# ── 자세별 F7 ──
+def still(name, seed=0):
+    rng = np.random.default_rng(seed)
+    return lambda t: [pose(name, dx=rng.uniform(-.004, .004), dy=rng.uniform(-.004, .004))]
+
+
+def test_no_motion_standing_is_short():
+    n = S.no_motion_minutes_standing * 60
+    sent = run_monitor(timeline((n + 5, still("standing")), fps=2))
+    assert [(p["p_source"], p["p_detail"]["posture"]) for p in sent] == [("no_motion", "standing")]
+
+
+def test_no_motion_sitting_tv_not_before_limit():
+    sent = run_monitor(timeline((S.no_motion_minutes_sitting * 60 - 30, still("sitting")), fps=1))
+    assert sent == []
+
+
+def test_no_motion_off_while_resting():
+    """소파에 스스로 누워 1시간 잠 → F7 알람 없음, F6 알람도 없음."""
+    sent = run_monitor(timeline(*sofa_rest(), (3600, still("sofa_lying")), fps=1))
+    assert sent == []
