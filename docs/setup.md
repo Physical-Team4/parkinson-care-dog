@@ -39,13 +39,18 @@ PC에서는 하드웨어·Supabase adapter 대신 mock이 동작한다 (인터�
 
 ### 2-2. Miniforge + conda 환경
 ```bash
+cd ~
 curl -L -O https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-Linux-aarch64.sh
-bash Miniforge3-Linux-aarch64.sh
+bash Miniforge3-Linux-aarch64.sh -b -p ~/miniforge3
+~/miniforge3/bin/conda init bash && source ~/.bashrc
+sudo apt install -y git
+git clone https://github.com/Physical-Team4/parkinson-care-dog.git && cd parkinson-care-dog
 conda env create -f environment.yml
 conda activate pd-dog
 ```
+- 확인됨 (2026-11-26, A): Pi 5 trixie에서 `environment.yml` 전체 설치 성공 (Python 3.13, numpy 2.5.5, pip의 vosk·mpremote 포함).
 
-### 2-3. ⚠️ picamera2·libcamera·hailort를 conda에서 쓰기 (확인 필요)
+### 2-3. picamera2·libcamera·hailort를 conda에서 쓰기 (방법 A로 확인됨)
 이 셋은 apt로 **시스템 Python**에 설치되고, conda-forge/pip에는 Pi용 빌드가 없거나 버전이 맞지 않는다.
 먼저 확인 스크립트를 돌린다:
 ```bash
@@ -80,11 +85,27 @@ python3 -m venv --system-site-packages ~/pd-dog-venv
      `conda env update -f environment.yml --prune`. 고정했으면 이 섹션과 [decisions.md](decisions.md)에 기록.
   2. 그래도 안 되면 conda numpy를 빼고 시스템 numpy를 쓰는 방법은 쓰지 않는다 (conda 패키지들이 깨짐) → 방법 B 검토.
 
-결과(어떤 방법이 됐는지, 필요한 추가 명령)를 이 섹션에 기록한다.
-- [ ] picamera2 import: (결과 기록)
-- [ ] libcamera import: (결과 기록)
-- [ ] hailo_platform import: (결과 기록)
-- [ ] numpy: conda / 시스템 중 어느 쪽, 버전 (결과 기록)
+**결과 (2026-11-26, A): 방법 A 성공.** 추가 명령 없이 `bash pi/scripts/check_pi_env.sh --link` 한 번이면 된다.
+- [x] picamera2 import: ✅
+- [x] libcamera import: ✅ (libcamera v0.8.0, `GLIBCXX` 오류 없음)
+- [x] hailo_platform import: ✅ (hailort 4.23.0)
+- [x] numpy: **conda 2.5.5**가 불림 (시스템 2.2.4). 둘 다 2.x라 ABI 오류 없음 → 고정 안 함
+- [x] 실제 동작: conda 환경에서 `Picamera2` 640×480 RGB888 프레임 1장 `capture_array()` → `(480, 640, 3) uint8`,
+  `hailo_platform.VDevice()` 열기·해제 성공 (프레임은 메모리에서 확인 후 폐기)
+
+동작 확인 명령 (Pi, `pd-dog` 환경):
+```bash
+python -c "
+from picamera2 import Picamera2
+cam = Picamera2()
+cam.configure(cam.create_preview_configuration(main={'size': (640, 480), 'format': 'RGB888'}))
+cam.start(); f = cam.capture_array(); cam.stop(); cam.close()
+print('camera ok', f.shape, f.dtype); del f
+from hailo_platform import VDevice
+d = VDevice(); print('hailo ok'); d.release()
+"
+```
+- conda나 apt 업데이트로 numpy major가 달라지면(예: conda numpy 3.x) 위 명령을 다시 돌려 확인한다.
 
 ### 2-3-1. AI HAT+ 13T = Hailo-8L
 - AI HAT+ 13 TOPS의 칩은 **Hailo-8L**이다 (`lspci`에는 "Hailo-8"로 나올 수 있음 → `hailortcli fw-control identify`의

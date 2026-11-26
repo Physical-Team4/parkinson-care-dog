@@ -13,6 +13,7 @@ Pi ↔ ESP32는 USB 시리얼 케이블 하나. 데이터는 Supabase(PostgreSQL
 | 부품·전원 | [docs/hardware.md](docs/hardware.md) |
 | 핀·포트 배정 | [docs/pinmap.md](docs/pinmap.md) |
 | 기능 F1~F7, 모델 | [docs/features.md](docs/features.md) |
+| 모델 벤치마크 결과 | [docs/benchmarks.md](docs/benchmarks.md) |
 | 환경 세팅, Pi 특이사항 | [docs/setup.md](docs/setup.md) |
 | 대시보드 API ↔ Supabase 대응 | [docs/api.md](docs/api.md) |
 | DB·RLS·오프라인 대기열 | [docs/db.md](docs/db.md), [db/](db/) |

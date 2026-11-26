@@ -19,7 +19,9 @@
 
 ## D-003 개발 환경은 conda 하나로 통일 (확정)
 - 레포 루트 `environment.yml`. Pi 5는 Miniforge.
-- picamera2·hailort 연결 방식은 실기기 확인 후 [setup.md](setup.md)에 기록.
+- picamera2·hailort 연결 방식: **방법 A(시스템 dist-packages를 `.pth`로 연결)로 확정** (2026-11-26, Pi 5 trixie).
+  picamera2·libcamera·hailo_platform import와 카메라 캡처·Hailo VDevice 동작 확인, numpy는 conda 것 사용.
+  방법 B(Pi만 venv)는 쓰지 않음. 상세 [setup.md](setup.md) 2-3.
 
 ## D-004 DB는 Supabase(PostgreSQL) (확정, 2026-11-26)
 - 원본 저장소는 Supabase. Pi의 SQLite는 인터넷 끊김 동안의 대기열 전용.
@@ -54,6 +56,22 @@
   - 대신 과방전 보호가 셀에 없으므로: 잔량 10% 미만이면 Pi가 스스로 안전 종료 ([setup.md](setup.md) 2-6),
     정품 셀만 사용, 단락 주의, 장기 보관 시 분리.
 - 충전은 X1200 USB-C에 Pi 5용 27W PD 어댑터. Pi 본체 USB-C는 사용 안 함.
+
+## D-009 포즈 추론은 AI HAT+ (Hailo-8L)로 한다 (확정, 2026-11-26)
+- AI HAT+ 13T(Hailo-8L)를 구매·장착했고 Pi에서 동작 확인 (드라이버·conda 연결·VDevice, [setup.md](setup.md) 2-3).
+- F6·F7 포즈 추론은 Hailo에서 돌린다. "CPU 벤치마크 후 사용 여부 결정"은 폐기.
+- 남은 일: Hailo-8L용 포즈 모델 `.hef` 준비([todo.md](todo.md))와 FPS·지연 측정 (0.4초 주기 충족 확인).
+- CPU 추론은 PC 개발·테스트용으로만 (Pi 운영 경로 아님).
+
+## D-010 pose 모델은 n에 한정하지 않고 벤치마크로 선택, 기본 입력 640 (확정, 2026-11-26)
+- 이전 안 "YOLO11n-pose, 입력 320 / 의심 시 640"은 CPU 추론 기준이었다 → Hailo-8L 사용(D-009)으로 대체.
+- 후보: n·s·m 크기. Model Zoo의 hailo8l 기성 pose 모델(yolov8s_pose, yolov8m_pose 등)로 시작하고,
+  YOLO11·YOLO26은 hailo8l `.hef`가 있거나 DFC 변환이 되면 비교에 넣는다.
+- 기준: **초당 10프레임 이상 중 누운 자세 인식이 가장 좋은 모델** (낙상 감지는 5~10fps면 충분).
+  칩에 다 안 들어가 나눠 실행되는 모델, 전력·발열이 큰 모델은 벤치마크 결과로 판단.
+- 입력 크기는 `.hef`에 고정되므로 **기본 640 하나** (320/640 전환용 `.hef` 두 개는 쓰지 않음).
+- F6·F7은 규칙 기반. 학습(파인튜닝 또는 보조 "넘어진 사람" 검출 모델)은 카메라 각도·거리 조정 후에도
+  누운 자세를 자주 놓칠 때만 검토. 상세 [features.md](features.md#f6f7-비전-계획), 결과 [benchmarks.md](benchmarks.md).
 
 ## DB 적용 기록
 Supabase에 마이그레이션을 적용하면 여기에 남긴다.
