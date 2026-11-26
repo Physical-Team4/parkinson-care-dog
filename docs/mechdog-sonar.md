@@ -28,7 +28,9 @@ sonar.setRGB(0, R, G, B)             # 센서 LED 색 (0~255)
 
 - 원본 코드는 0.08초 간격으로 계속 읽음
 - 앱 전송 시 ×10 해서 mm로 바꾸고 최대 5000mm로 제한
-- 단위는 실제 자로 재서 확인 필요
+- 단위 (Hiwonder 위키, 2026-11-27 확인): Python `getDistance()`는 예제 설명상 **cm**, 공식 시리얼 `CMD|4|1|$`는 **mm**를 준다.
+  공식 슬레이브 UART 프로토콜은 우리 프로젝트에서 사용 금지([esp32/CLAUDE.md](../esp32/CLAUDE.md))라 참고용.
+- Python 값의 실제 단위·최대 거리·낮은 장애물(문턱·전선) 감지 여부는 자로 재서 확인 → `esp32/m0/sonar_imu_test.py` ([navigation.md](navigation.md) M0)
 
 ## 거리 계속 읽기 예시 (원본 코드 방식)
 

@@ -46,10 +46,13 @@
 | `ack` | `id`, `ok`, `err?` | 명령 응답 | — |
 
 - `mode`: `idle` / `walking` / `paused`(ToF 대기) / `medication` / `alarm` (초안)
+- `dog_battery_pct`: MechDog 배터리 전압을 2S 기준 약 6.4V = 0%, 8.4V = 100%로 직선 변환 (두 값은 `esp32/config.py`).
+  보드에서 전압을 읽는 Python API는 확인 필요 ([mechdog-motion.md](mechdog-motion.md#배터리-전압)).
+- `robot_tipped`: IMU `read_angle()` 기울기(X·Y)가 임계값(`esp32/config.py`)을 넘으면 true. IMU는 기울기만 주고 방향(yaw)은 없음.
 
 ## 제안 중 (합의 전, 아직 구현 안 함)
-- **로봇 이동** (A, 2026-11-27): `nav_move`·`nav_turn`·`nav_stop`, `nav_blocked`·`nav_turn_done`, `status.front_cm`, `mode: navigating`,
-  ESP32 안전 규칙(초음파 정지·TTL 정지). 상세는 [navigation.md](navigation.md) §6. C·D 검토 후 위 표로 옮긴다.
+- **로봇 이동** (A, 2026-11-27): `nav_move`(보폭 mm·각도 °·TTL)·`nav_stop`, `nav_blocked`, `status.front_cm`, `mode: navigating`,
+  ESP32 안전 규칙(초음파 정지·TTL 정지·기울기 정지). 상세는 [navigation.md](navigation.md) §6. C·D 검토 후 위 표로 옮긴다.
 
 ## 하트비트·장애 처리
 - ESP32는 `hb`가 **5초**(제안, `esp32/config.py` `PI_TIMEOUT_MS`) 넘게 안 오면 Pi 무응답으로 판단.
