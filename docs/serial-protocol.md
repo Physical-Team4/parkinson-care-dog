@@ -47,6 +47,10 @@
 
 - `mode`: `idle` / `walking` / `paused`(ToF 대기) / `medication` / `alarm` (초안)
 
+## 제안 중 (합의 전, 아직 구현 안 함)
+- **로봇 이동** (A, 2026-11-27): `nav_move`·`nav_turn`·`nav_stop`, `nav_blocked`·`nav_turn_done`, `status.front_cm`, `mode: navigating`,
+  ESP32 안전 규칙(초음파 정지·TTL 정지). 상세는 [navigation.md](navigation.md) §6. C·D 검토 후 위 표로 옮긴다.
+
 ## 하트비트·장애 처리
 - ESP32는 `hb`가 **5초**(제안, `esp32/config.py` `PI_TIMEOUT_MS`) 넘게 안 오면 Pi 무응답으로 판단.
   - 이때 `touch_sos`, `med_missed`가 발생하면 MP3 경보음으로 현장 경보 (원격 알림 불가, [decisions.md](decisions.md) D-001).
