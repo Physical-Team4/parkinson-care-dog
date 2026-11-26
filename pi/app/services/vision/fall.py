@@ -22,6 +22,8 @@
     declared·asleep 동안: 빠른 낙상(descent)은 그대로 알람. 느린 하강으로 눕기·과정 못 본 누움은 잠(resting)으로 본다.
     declared 후 sleep_declared_timeout_s 안에 눕지 않으면 취소.
 - 이불 단서: 과정을 못 본 누움에서 상체는 보이는데 무릎·발목이 계속 안 보이면(이불 덮음) lying_only 대기를 늘린다.
+- 잠자리 (at_sleep_spot, monitor가 판단: 취침 시간대 + 잠자리 마커가 누운 사람 근처):
+    누운 동안 한 번이라도 잠자리였으면 취침 선언과 같게 본다 (느린 눕기·과정 못 본 누움 → 잠, 빠른 낙상은 알람).
 - 판정 불가 프레임(어깨·엉덩이가 안 보임)은 lost_tolerance_s 동안 직전 상태를 유지하고, 넘으면 "none".
 - 알람 후에는 일어서거나 앉은 상태가 rearm_upright_s 이어져야 다음 알람이 가능 (같은 낙상으로 반복 알람 안 함).
 알려진 한계 (실측으로 확인할 것, docs/todo.md):
@@ -160,6 +162,7 @@ class FallDetector:
         self._covered_n = 0                                 # 누운 프레임 중 하체(무릎·발목)가 안 보인 수
         # 취침 선언: None / "declared" / "asleep"
         self._sleep: str | None = None
+        self._spot_seen = False                             # 이번 누움 중 잠자리 마커 근처였음
         self._sleep_since = 0.0
 
     def set_sleep_mode(self, on: bool, now: float) -> None:
@@ -221,6 +224,7 @@ class FallDetector:
     def _start_lying(self, now: float) -> None:
         self._lying_since, self._lying_conf, self._max_torso = now, [], 0.0
         self._lying_n = self._covered_n = 0
+        self._spot_seen = False
         self._seg_posture = "lying"
         seen = (self._ref is not None and self._last_upright_s is not None
                 and now - self._last_upright_s <= self.cfg.onset_max_gap_s)
@@ -241,11 +245,15 @@ class FallDetector:
                 if not same:
                     self._unseen_from = "lying"
 
+    def _sleepish(self) -> bool:
+        return self._sleep is not None or self._spot_seen
+
     def _slow_pending(self) -> bool:
         return (not self._alarmed and self._lying_since is not None and self._onset_ref is not None
-                and self._hip_drop >= self.cfg.slow_hip_drop_ratio)
+                and self._hip_drop >= self.cfg.slow_hip_drop_ratio and not self._sleepish())
 
-    def update(self, f: PoseFeatures | None, now: float) -> FallUpdate:
+    def update(self, f: PoseFeatures | None, now: float, at_sleep_spot: bool = False) -> FallUpdate:
+        """at_sleep_spot: 이 프레임에서 잠자리(취침 시간대 + 잠자리 마커 근처)에 있음 (monitor가 계산)."""
         cfg = self.cfg
         if self._sleep == "declared" and now - self._sleep_since > cfg.sleep_declared_timeout_s:
             self._sleep = None      # 선언 후 오래 눕지 않음 → 취소
@@ -274,6 +282,8 @@ class FallDetector:
                     self._covered_n += 1
                 if self._sleep == "declared":
                     self._sleep = "asleep"
+                if at_sleep_spot:
+                    self._spot_seen = True
                 self._max_torso = max(self._max_torso, f.torso_deg)
                 if self._onset_ref is not None:
                     drop = (f.hip_y - self._onset_ref.hip_y) / self._onset_ref.torso_len
@@ -319,8 +329,8 @@ class FallDetector:
                                   **({"hip_drop": round(self._hip_drop, 2)} if ref else {}), **detail})
             self._falling_since = None   # 소파·침대에 털썩 눕기: 머리는 빨리 내려갔지만 엉덩이 높이 그대로 → 취소
         if ref is not None:   # 눕는 과정을 봄 → 엉덩이 하강으로 판단 (작으면 스스로 눕기, 알람 없음)
-            if self._sleep is not None and lying_s >= cfg.slow_confirm_s:
-                self._resting = True   # 취침 선언 후 눕기 → 요에 눕는 동작으로 봄 (빠른 낙상은 위에서 이미 처리)
+            if self._sleepish() and lying_s >= cfg.slow_confirm_s:
+                self._resting = True   # 취침 선언·잠자리에서 눕기 → 요에 눕는 동작으로 봄 (빠른 낙상은 위에서 이미 처리)
                 return None
             if self._hip_drop >= cfg.slow_hip_drop_ratio and lying_s >= cfg.slow_confirm_s:
                 return FallAlarm("slow_fall", min(1.0, cfg.conf_slow * mean_conf), self._onset_s,
@@ -329,7 +339,7 @@ class FallDetector:
             if self._hip_drop < cfg.slow_hip_drop_ratio and lying_s >= cfg.slow_confirm_s:
                 self._resting = True   # 엉덩이 그대로 스스로 누움 → 쉬는 중
             return None
-        if self._sleep is not None:   # 취침 선언 후 과정을 못 본 누움 → 잠
+        if self._sleepish():   # 취침 선언·잠자리에서 과정을 못 본 누움 → 잠
             self._resting = True
         if self._resting:      # 기억상 쉬던 사람이 계속 누워 있음 / 잠
             return None

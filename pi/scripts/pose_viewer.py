@@ -98,7 +98,7 @@ class Judge:
     """F6·F7 판정을 화면 확인용으로 돌린다. 알람은 Supabase로 보내지 않고 메모리 가짜(MockRemote)에만 쌓인다.
     로봇은 정지 상태로 가정 (ESP32 연결 없이 뷰어만 켜므로)."""
 
-    def __init__(self, settings) -> None:
+    def __init__(self, settings, marker_view=None) -> None:
         from pi.app.adapters.mock import MockRemote
         from pi.app.models.outbox import Outbox
         from pi.app.services.sync import SyncService
@@ -107,9 +107,11 @@ class Judge:
         self.remote = MockRemote()
         self.monitor = VisionMonitor.from_settings(settings, SyncService(Outbox(":memory:"), self.remote))
         self.alarms: list[dict] = []
+        self.marker_view = marker_view   # --markers면 같은 프레임 마커로 잠자리 판단
 
     def __call__(self, people, now_s: float) -> dict:
-        pose = self.monitor.update(people, now_s, "idle", True)
+        markers = self.marker_view.last if self.marker_view else None
+        pose = self.monitor.update(people, now_s, "idle", True, markers)
         while self.remote.executed:
             pl = self.remote.executed.pop(0).payload
             self.alarms.append({"at": time.strftime("%H:%M:%S"), "source": pl["p_source"],
@@ -119,6 +121,7 @@ class Judge:
         return {"state": pose.state, "resting": self.monitor.resting, "sleep": self.monitor.sleep_mode,
                 "still_s": round(self.monitor.no_motion.still_s(now_s)),
                 "persons": [{"id": p.track_id, "state": p.state, "resting": p.resting, "focus": p.focus,
+                             "spot": p.at_sleep_spot,
                              "bbox": [round(v, 4) for v in p.bbox]} for p in self.monitor.people],
                 "alarms": self.alarms}
 
@@ -129,11 +132,13 @@ class MarkerView:
     def __init__(self, detector, marker_cm: float | None, focal_px: float | None) -> None:
         self.detector = detector
         self.marker_cm, self.focal_px = marker_cm, focal_px
+        self.last = []          # 마지막 프레임 마커 (Judge가 잠자리 판단에 씀)
 
     def __call__(self, frame) -> dict:
         from pi.app.adapters.markers import estimate_bearing_deg, estimate_distance_cm
 
         found = self.detector.detect(frame)
+        self.last = found
         def r(v, n=1):
             return None if v is None else round(v, n)
         return {"ms": round(self.detector.last_ms, 1), "list": [
@@ -222,7 +227,9 @@ def main() -> None:
         if not (s.marker_size_cm and s.camera_focal_px):
             log.warning("MARKER_SIZE_CM·CAMERA_FOCAL_PX 미설정 → 마커 거리·방향 추정 끔 (M0 측정 후 .env)")
 
-    latest, stop, judge = Latest(), threading.Event(), Judge(s)
+    latest, stop, judge = Latest(), threading.Event(), Judge(s, marker_view)
+    if s.sleep_marker_ids and not args.markers:
+        log.warning("잠자리 마커가 설정돼 있지만 --markers가 꺼져 있음 → 잠자리 판단 안 함")
     worker = threading.Thread(target=run_loop, args=(camera, estimator, latest, encode_jpeg, stop, args.quality,
                                     0.1 if args.mock else 0.0, judge, marker_view),
                               daemon=True)
