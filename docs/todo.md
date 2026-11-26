@@ -34,10 +34,13 @@
 | 터치 센서가 쓰는 IO (IO32/IO33) | 확인 예정 | D | `TOUCH_PIN`, 레이저 IO |
 | 레이저 연결 방법 | 방법 1(포트 3 공유) 채택 예정 | C·D | [decisions.md](decisions.md) D-002 |
 | ESP32 내장 Wi-Fi 사용 가능 여부 | `import network` 테스트 예정 | D | Pi 꺼짐 시 알림 경로 |
-| Hailo 포즈 추론 FPS·지연 | Hailo 사용 확정 (D-009). `.hef` 준비 후 카메라→추론 FPS·지연 측정, 포즈 0.4초 주기 충족 확인 | A | `hailo` adapter, F6·F7 |
+| Model Zoo hailo8l pose 모델 벤치마크 | yolov8s_pose, yolov8m_pose 등으로 FPS·지연·누운 자세 인식·전력 측정 → [benchmarks.md](benchmarks.md). 10fps 이상 중 가장 정확한 모델 선택 (D-010) | A | `hailo` adapter, F6·F7 |
+| 카메라 각도·거리 조정 테스트 | 학습 전에 카메라 각도, 사용자 거리 2~3m, 입력 해상도로 누운 자세 인식률 확인 ([features.md](features.md#f6f7-비전-계획)) | A | F6·F7, 카메라 장착 위치 |
+| F6·F7 판정 임계값 | 하강 속도·몸통 각도·누운 지속 시간, 무움직임 N분·이동량 임계값 → 실측 후 `pi/app/config.py` | A | F6·F7 |
+| 로봇 이동 모드 목록 | F7은 이동 중 모드에서 누적 중단. 지금 프로토콜 이동 모드는 `walking`뿐. `approaching` 등 추가되면 [serial-protocol.md](serial-protocol.md) `mode`와 `pi/app/config.py` 목록에 같이 반영 | A·C·D | F7 |
 | 대시보드 기술 스택 | 대시보드 README 확인 필요 | D | Supabase 클라이언트 |
 | environment.yml 새 패키지의 aarch64 + Python 3.13 설치 | 지금 목록은 Pi에서 설치 확인됨 (2026-11-26). 앞으로 추가할 패키지(onnxruntime, ultralytics 등)는 추가할 때 Pi에서 `conda env update` 확인 | A·B | `environment.yml` |
-| YOLO11n-pose / YOLO26n-pose의 Hailo-8L용 `.hef` | 기성 `.hef`가 없을 수 있음 → Hailo DFC로 변환 필요 (x86 Linux/WSL2, 대상 `hailo8l`) | A | F6·F7, [setup.md](setup.md) 2-3-1 |
+| YOLO11·YOLO26 pose의 hailo8l `.hef` | 기성 `.hef` 존재 여부 확인. 없으면 DFC 변환 환경 준비 (x86 Linux/WSL2, 공용 conda와 분리, 대상 `hailo8l`) | A | F6·F7, [setup.md](setup.md) 2-3-1 |
 | 시리얼 baud·메시지 형식 | 초안 작성됨 | B·D | [serial-protocol.md](serial-protocol.md) |
 | 보호자 메신저 종류 (Telegram 등) | 미정 | D | `.env` 변수, notifier adapter |
 | 라이선스 | 미정 | 전원 | `LICENSE` |
