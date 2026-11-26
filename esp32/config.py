@@ -7,9 +7,15 @@ PI_TIMEOUT_MS = 5000        # 이 시간 hb 없으면 Pi 무응답 → MP3 경�
 STATUS_INTERVAL_MS = 1000
 
 # ── 포트 3: 터치 + 레이저 (D-002 방법 1 예정) ──
-TOUCH_PIN = None            # TODO(D): IO32 또는 IO33 확인
+TOUCH_PIN = 33              # 확인됨 (2026-11-26, D): 핀 찾기 테스트에서 IO33만 반응
+TOUCH_ACTIVE_LEVEL = 0      # 누르면 0, 떼면 1 (내부 PULL_UP)
 TOUCH_SOS_HOLD_MS = 3000    # F2: 3초 누르기
+TOUCH_MIN_TAP_MS = 80       # 이보다 짧은 접촉은 스침·신호 튐으로 무시. 실측: 정상 톡 100ms~, 스침 53ms (todo.md)
+TOUCH_TAP_FEEDBACK_MS = 500 # 짧은 터치 인식 후 눈 초록 불 켜 두는 시간
 LASER_PIN = None            # TODO(C·D): 터치가 안 쓰는 IO. 방법 1 확정 전까지 None
+
+# ── 내장: 머리 발광 초음파 RGB 눈 (IIC1). 터치 피드백 ──
+EYES_I2C_BUS = 1
 
 # ── 포트 1: VL53L1X (IIC2) ──
 TOF_I2C_BUS = 2
