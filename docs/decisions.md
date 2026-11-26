@@ -19,7 +19,9 @@
 
 ## D-003 개발 환경은 conda 하나로 통일 (확정)
 - 레포 루트 `environment.yml`. Pi 5는 Miniforge.
-- picamera2·hailort 연결 방식은 실기기 확인 후 [setup.md](setup.md)에 기록.
+- picamera2·hailort 연결 방식: **방법 A(시스템 dist-packages를 `.pth`로 연결)로 확정** (2026-11-26, Pi 5 trixie).
+  picamera2·libcamera·hailo_platform import와 카메라 캡처·Hailo VDevice 동작 확인, numpy는 conda 것 사용.
+  방법 B(Pi만 venv)는 쓰지 않음. 상세 [setup.md](setup.md) 2-3.
 
 ## D-004 DB는 Supabase(PostgreSQL) (확정, 2026-11-26)
 - 원본 저장소는 Supabase. Pi의 SQLite는 인터넷 끊김 동안의 대기열 전용.
