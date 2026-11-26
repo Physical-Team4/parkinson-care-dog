@@ -87,6 +87,9 @@ class Settings:
     # ── F6·F7 판정 (services/vision/). ⚠️ 전부 임시값 → 집에서 실측 후 조정 (docs/todo.md) ──
     # 비율은 모두 "사람 bbox 높이 대비" (거리와 무관). 각도는 몸통(어깨 중점→엉덩이 중점)과 수직선 사이.
     vision_kpt_min_conf: float = 0.5        # 이 이상이어야 "보이는 관절"
+    # 여러 사람 추적: 박스 겹침(IoU) ≥ 이 값이면 같은 사람. 아니면 중심 거리/이전 박스 높이 ≤ center_max_ratio
+    track_iou_min: float = 0.3
+    track_center_max_ratio: float = 0.8
     # 공통: 어깨 1개 이상 + 엉덩이 1개 이상 보여야 판정. 아니면 "판정 불가" (팔만 보이는 경우 등)
     vision_lost_tolerance_s: float = 2.0    # 판정 불가 프레임이 이 시간 이내면 직전 상태 유지
     # F6 자세
@@ -126,6 +129,7 @@ class Settings:
     no_motion_minutes_standing: float = 5.0         # 서서 굳어 있음은 짧게
     no_motion_minutes_sitting: float = 30.0         # TV·독서 고려
     no_motion_minutes_resting: float | None = None  # 스스로 누워 쉬는 중(잠) → 끔
+    no_motion_pause_multi: bool = True              # 2명 이상 보이면 F7 멈춤 (다른 사람이 같이 있음)
     no_motion_threshold: float = 0.05       # 기준 자세 대비 관절 평균 이동 (bbox 높이 비율) > 이 값 → 움직임
     no_motion_absent_reset_s: float = 10.0  # 사람 없음/판정 불가가 이보다 길면 누적 초기화
     no_motion_min_common_kpts: int = 4      # 이동량 계산에 필요한 공통 관절 수

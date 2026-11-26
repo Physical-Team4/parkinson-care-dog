@@ -116,8 +116,10 @@ class Judge:
                                 "confidence": pl["p_confidence"], "detail": pl["p_detail"]})
             log.warning("판정 알람 (전송 안 함): %s", self.alarms[-1])
         self.alarms = self.alarms[-5:]
-        return {"state": pose.state, "resting": self.monitor.fall.resting, "sleep": self.monitor.fall.sleep_mode,
+        return {"state": pose.state, "resting": self.monitor.resting, "sleep": self.monitor.sleep_mode,
                 "still_s": round(self.monitor.no_motion.still_s(now_s)),
+                "persons": [{"id": p.track_id, "state": p.state, "resting": p.resting, "focus": p.focus,
+                             "bbox": [round(v, 4) for v in p.bbox]} for p in self.monitor.people],
                 "alarms": self.alarms}
 
 

@@ -420,3 +420,82 @@ def test_covered_lying_waits_longer():
     assert alarms == []
     _, alarms = run_fall(timeline((S.fall_lying_only_covered_s + 2, covered_lying()), fps=2))
     assert [(a.path, a.detail["covered"]) for _, a in alarms] == [("lying_only", True)]
+
+
+# ── 여러 사람 ──
+from pi.app.services.vision.tracker import PersonTracker  # noqa: E402
+
+
+def carer(score=0.95):
+    """보호자: 화면 왼쪽에 서 있음, 검출 점수가 더 높음."""
+    return pose("standing", dx=-0.3, score=score)
+
+
+def patient(name="standing", t=1.0, frm="standing", score=0.7):
+    return pose(name, t, frm=frm, dx=0.25, score=score)
+
+
+def run_mon(frames, mode="idle"):
+    mon, remote = make_monitor()
+    poses = [mon.update(people, now, mode, True) for now, people in frames]
+    return mon, [op.payload for op in remote.executed], poses
+
+
+def test_tracker_keeps_ids_and_follows_fast_fall():
+    tr = PersonTracker(S.track_iou_min, S.track_center_max_ratio, S.vision_lost_tolerance_s, ASPECT)
+    ids = []
+    for now, people in timeline((1, [carer(), patient()]), (0.5, lambda t: [carer(), patient("lying", t)]),
+                                (1, [carer(), patient("lying")])):
+        vis, _ = tr.update(people, now)
+        ids.append(sorted((t.track_id, round(t.person.bbox[0], 2)) for t in vis))
+    assert {i for f in ids for i, _ in f} == {1, 2}           # 쓰러지는 동안에도 새 번호가 안 생김
+
+
+def test_patient_falls_while_carer_stands_alarms():
+    """보호자(점수 높음)가 서 있고 환자가 쓰러짐 → 환자 쪽 알람 (예전에는 점수 1등만 봐서 놓침)."""
+    frames = timeline((2, [carer(), patient()]), (0.5, lambda t: [carer(), patient("lying", t)]),
+                      (6, [carer(), patient("lying")]))
+    mon, sent, poses = run_mon(frames)
+    [alarm] = sent
+    assert alarm["p_source"] == "camera" and alarm["p_detail"]["people"] == 2
+    lying_id = next(p.track_id for p in mon.people if p.state == "lying")
+    assert alarm["p_detail"]["track"] == lying_id
+    assert poses[-1].state == "lying"                          # 대시보드는 쓰러진 사람을 보여줌
+
+
+def test_two_people_swapping_order_no_false_alarm():
+    """서 있는 사람과 앉은 사람의 점수가 번갈아 1등 → 예전 방식은 머리가 '내려간' 것처럼 보였음."""
+    a = lambda s: pose("standing", dx=-0.3, score=s)          # noqa: E731
+    b = lambda s: pose("sitting", dx=0.25, score=s)           # noqa: E731
+    frames = []
+    for k, (now, _) in enumerate(timeline((30, [None]))):
+        frames.append((now, [a(0.9), b(0.8)] if k % 2 else [b(0.92), a(0.85)]))
+    _, sent, _ = run_mon(frames)
+    assert sent == []
+
+
+def test_no_motion_paused_with_two_people():
+    n = S.no_motion_minutes_sitting * 60 + 60
+    _, sent, _ = run_mon(timeline((n, [pose("sitting", dx=-0.3), pose("sitting", dx=0.25)]), fps=1))
+    assert sent == []
+    _, sent, _ = run_mon(timeline((n, [pose("sitting", dx=0.25)]), fps=1))
+    assert [p["p_source"] for p in sent] == ["no_motion"]
+
+
+def test_memory_handed_to_reappearing_person():
+    """소파에서 쉬다 로봇이 5분 놓침 → 다시 나타나면 (새 추적 번호여도) 기억을 이어받아 알람 없음."""
+    mon, sent, _ = run_mon(timeline(*sofa_rest(), (300, []), (S.fall_lying_only_s + 60, [pose("sofa_lying")]),
+                                    fps=2))
+    assert sent == [] and mon.resting
+
+
+def test_sleep_mode_applies_to_new_person_and_clears_on_wake():
+    mon, remote = make_monitor()
+    now = 0.0
+    mon.set_sleep_mode(True, now)
+    for now, people in timeline((SETTLE, STAND), (4, lambda t: [pose("lying", t)]), (60, LIE)):
+        mon.update(people, now, "idle", True)
+    assert remote.executed == [] and mon.sleep_mode == "asleep"
+    for now2, people in timeline((2, lambda t: [pose("standing", t, frm="lying")]), (3, STAND)):
+        mon.update(people, now + 0.1 + now2, "idle", True)
+    assert mon.sleep_mode is None

@@ -170,6 +170,10 @@ class FallDetector:
     def sleep_mode(self) -> str | None:
         return self._sleep
 
+    def lost(self) -> None:
+        """추적이 끝남(사람이 오래 안 보임). 마지막 상태를 기억에 남기고 추적 상태를 비운다."""
+        self._reset_tracking()
+
     @property
     def resting(self) -> bool:
         """스스로 누워 쉬는 중(잠). F7이 자세별 기준 시간을 고를 때 쓴다."""
