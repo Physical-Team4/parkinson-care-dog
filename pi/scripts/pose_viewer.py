@@ -3,6 +3,7 @@
     # Pi (레포 루트, pd-dog 환경)
     python -m pi.scripts.pose_viewer --hef ~/pd-dog-models/hailo8l/yolov8s_pose.hef            # 뼈대만
     python -m pi.scripts.pose_viewer --hef ~/pd-dog-models/hailo8l/yolov8s_pose.hef --video    # 카메라 화면 + 뼈대
+    python -m pi.scripts.pose_viewer --markers --video                                         # + 로봇 이동 마커 표시
     # 노트북
     ssh -L 8765:127.0.0.1:8765 <user>@<pi>     → 브라우저 http://localhost:8765
 
@@ -55,22 +56,24 @@ class Latest:
 
 
 def run_loop(camera, estimator, latest: Latest, encode_jpeg, stop: threading.Event, quality: int,
-             min_interval_s: float = 0.0, judge=None) -> None:
-    """judge: (people, now_s) -> dict 이면 F6·F7 판정 결과를 화면에 같이 보낸다."""
+             min_interval_s: float = 0.0, judge=None, markers=None) -> None:
+    """judge: (people, now_s) -> dict 이면 F6·F7 판정 결과를 화면에 같이 보낸다.
+    markers: (frame) -> dict 이면 로봇 이동 마커 인식 결과를 같이 보낸다."""
     try:
-        _loop(camera, estimator, latest, encode_jpeg, stop, quality, min_interval_s, judge)
+        _loop(camera, estimator, latest, encode_jpeg, stop, quality, min_interval_s, judge, markers)
     except Exception as e:
         log.exception("추론 루프 중단")
         latest.put({"error": f"{type(e).__name__}: {e}"})
 
 
 def _loop(camera, estimator, latest: Latest, encode_jpeg, stop: threading.Event, quality: int,
-          min_interval_s: float, judge) -> None:
+          min_interval_s: float, judge, markers=None) -> None:
     fps_t, fps_n, fps = time.perf_counter(), 0, 0.0
     while not stop.is_set():
         t0 = time.perf_counter()
         frame = camera.capture()
         people = estimator.infer(frame)
+        marker_info = markers(frame) if markers else None
         h, w = frame.shape[:2]
         jpeg = encode_jpeg(frame, quality) if encode_jpeg else None
         del frame  # 원본 프레임 즉시 폐기 (JPEG는 latest에서 다음 프레임이 덮어씀)
@@ -85,6 +88,7 @@ def _loop(camera, estimator, latest: Latest, encode_jpeg, stop: threading.Event,
                         "kpts": np.round(p.keypoints, 4).tolist()} for p in people],
             "jpeg": base64.b64encode(jpeg).decode() if jpeg else None,
             "judge": judge(people, t0) if judge else None,
+            "markers": marker_info,
         })
         if min_interval_s:
             stop.wait(max(0.0, min_interval_s - (time.perf_counter() - t0)))
@@ -115,6 +119,26 @@ class Judge:
         return {"state": pose.state, "resting": self.monitor.fall.resting, "sleep": self.monitor.fall.sleep_mode,
                 "still_s": round(self.monitor.no_motion.still_s(now_s)),
                 "alarms": self.alarms}
+
+
+class MarkerView:
+    """로봇 이동 마커를 화면 확인용으로 인식한다 (docs/navigation.md M1). 거리·방향은 설정값이 있을 때만."""
+
+    def __init__(self, detector, marker_cm: float | None, focal_px: float | None) -> None:
+        self.detector = detector
+        self.marker_cm, self.focal_px = marker_cm, focal_px
+
+    def __call__(self, frame) -> dict:
+        from pi.app.adapters.markers import estimate_bearing_deg, estimate_distance_cm
+
+        found = self.detector.detect(frame)
+        def r(v, n=1):
+            return None if v is None else round(v, n)
+        return {"ms": round(self.detector.last_ms, 1), "list": [
+            {"id": m.marker_id, "corners": np.round(m.corners, 4).tolist(), "cx": round(m.cx, 3),
+             "side_px": round(m.side_px, 1),
+             "dist_cm": r(estimate_distance_cm(m, self.marker_cm, self.focal_px), 0),
+             "bearing_deg": r(estimate_bearing_deg(m, self.focal_px))} for m in found]}
 
 
 def make_handler(latest: Latest, video: bool, judge: Judge | None = None):
@@ -158,6 +182,7 @@ def main() -> None:
     ap.add_argument("--quality", type=int, default=60, help="--video JPEG 품질")
     ap.add_argument("--port", type=int, default=8765)
     ap.add_argument("--mock", action="store_true", help="하드웨어 없이 (PC에서 화면 확인용)")
+    ap.add_argument("--markers", action="store_true", help="로봇 이동 마커(ArUco) 인식·표시 (CPU 추가 사용)")
     args = ap.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
     s = load_settings()
@@ -183,9 +208,21 @@ def main() -> None:
         encode_jpeg = lambda f, q: simplejpeg.encode_jpeg(f, quality=q, colorspace="RGB")  # noqa: E731
         log.warning("⚠️ --video: 카메라 화면을 SSH 터널로 보냅니다 (개발용, 저장 안 함, D-011)")
 
+    marker_view = None
+    if args.markers:
+        if args.mock:
+            from pi.app.adapters.mock import MockMarkerDetector
+            detector = MockMarkerDetector()
+        else:
+            from pi.app.adapters.markers import ArucoMarkerDetector
+            detector = ArucoMarkerDetector(s.marker_dict)
+        marker_view = MarkerView(detector, s.marker_size_cm, s.camera_focal_px)
+        if not (s.marker_size_cm and s.camera_focal_px):
+            log.warning("MARKER_SIZE_CM·CAMERA_FOCAL_PX 미설정 → 마커 거리·방향 추정 끔 (M0 측정 후 .env)")
+
     latest, stop, judge = Latest(), threading.Event(), Judge(s)
     worker = threading.Thread(target=run_loop, args=(camera, estimator, latest, encode_jpeg, stop, args.quality,
-                                    0.1 if args.mock else 0.0, judge),
+                                    0.1 if args.mock else 0.0, judge, marker_view),
                               daemon=True)
     server = ThreadingHTTPServer(("127.0.0.1", args.port), make_handler(latest, args.video, judge))
     server.daemon_threads = True

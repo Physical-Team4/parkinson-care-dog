@@ -7,7 +7,7 @@ from typing import Any
 
 import numpy as np
 
-from pi.app.adapters.base import PersonPose, RemoteError
+from pi.app.adapters.base import MarkerObs, PersonPose, RemoteError
 from pi.app.views import serial_messages as sm
 from pi.app.views.api_schemas import Op
 
@@ -95,6 +95,20 @@ class MockPoseEstimator:
 
     def close(self) -> None:
         self.closed = True
+
+
+class MockMarkerDetector:
+    """정해 둔 마커 결과를 차례로 돌려준다 (다 쓰면 마지막 것 반복). 기본은 마커 없음."""
+
+    def __init__(self, results: list[list[MarkerObs]] | None = None) -> None:
+        self.results = results or [[]]
+        self.calls = 0
+        self.last_ms = 0.0
+
+    def detect(self, frame: np.ndarray) -> list[MarkerObs]:
+        r = self.results[min(self.calls, len(self.results) - 1)]
+        self.calls += 1
+        return r
 
 
 class MockMicrophone:
