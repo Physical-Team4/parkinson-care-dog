@@ -74,6 +74,33 @@ class Settings:
     pose_iou_threshold: float = 0.7
     pose_max_people: int = 3
 
+    # ── F6·F7 판정 (services/vision/). ⚠️ 전부 임시값 → 집에서 실측 후 조정 (docs/todo.md) ──
+    # 비율은 모두 "사람 bbox 높이 대비" (거리와 무관). 각도는 몸통(어깨 중점→엉덩이 중점)과 수직선 사이.
+    vision_kpt_min_conf: float = 0.5        # 이 이상이어야 "보이는 관절"
+    # 공통: 어깨 1개 이상 + 엉덩이 1개 이상 보여야 판정. 아니면 "판정 불가" (팔만 보이는 경우 등)
+    vision_lost_tolerance_s: float = 2.0    # 판정 불가 프레임이 이 시간 이내면 직전 상태 유지
+    # F6 자세
+    fall_lying_angle_deg: float = 60.0      # 몸통 각도 ≥ 이 값 → 누움 후보
+    fall_lying_min_aspect: float | None = 1.0   # 누움은 bbox 가로/세로 ≥ 이 값도 필요 (숙인 자세 제외). None=안 봄
+    sit_thigh_max_ratio: float = 0.5        # |무릎y-엉덩이y| / 몸통 길이 < 이 값 → 앉음 (허벅지가 수평)
+    # F6 쓰러짐
+    fall_descent_window_s: float = 1.0      # 이 시간 안에
+    fall_descent_ratio: float = 0.4         # 머리가 (서 있을 때 키의) 이 비율 이상 내려가면 "쓰러지는 중"
+    fall_confirm_window_s: float = 10.0     # 쓰러지는 중 시작 후 이 시간 안에
+    fall_confirm_lying_s: float = 3.0       # 누운 자세가 이만큼 이어지면 낙상 확정
+    # 쓰러지는 장면을 못 봤어도 누운 자세가 이만큼 이어지면 알람 (천천히 주저앉는 낙상 대비). None=끔
+    fall_lying_only_s: float | None = 60.0
+    fall_conf_descent: float = 1.0          # confidence = 이 가중치 × 핵심 관절 평균 신뢰도
+    fall_conf_lying_only: float = 0.6
+    fall_rearm_upright_s: float = 5.0       # 알람 후 이만큼 일어서/앉아 있어야 다음 낙상 알람 가능
+    # F7 무움직임
+    no_motion_minutes: float = 10.0         # 이 시간 동안 움직임이 없으면 알람
+    no_motion_threshold: float = 0.05       # 기준 자세 대비 관절 평균 이동 (bbox 높이 비율) > 이 값 → 움직임
+    no_motion_absent_reset_s: float = 10.0  # 사람 없음/판정 불가가 이보다 길면 누적 초기화
+    no_motion_min_common_kpts: int = 4      # 이동량 계산에 필요한 공통 관절 수
+    # ESP32 status.mode 중 로봇이 움직이는 모드 → F7 누적 멈춤·초기화 (docs/serial-protocol.md)
+    robot_moving_modes: tuple[str, ...] = ("walking",)
+
     # 주기 (docs/api.md)
     status_interval_s: float = 2.0
     pose_interval_s: float = 0.4

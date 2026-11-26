@@ -55,16 +55,17 @@ class Latest:
 
 
 def run_loop(camera, estimator, latest: Latest, encode_jpeg, stop: threading.Event, quality: int,
-             min_interval_s: float = 0.0) -> None:
+             min_interval_s: float = 0.0, judge=None) -> None:
+    """judge: (people, now_s) -> dict 이면 F6·F7 판정 결과를 화면에 같이 보낸다."""
     try:
-        _loop(camera, estimator, latest, encode_jpeg, stop, quality, min_interval_s)
+        _loop(camera, estimator, latest, encode_jpeg, stop, quality, min_interval_s, judge)
     except Exception as e:
         log.exception("추론 루프 중단")
         latest.put({"error": f"{type(e).__name__}: {e}"})
 
 
 def _loop(camera, estimator, latest: Latest, encode_jpeg, stop: threading.Event, quality: int,
-          min_interval_s: float) -> None:
+          min_interval_s: float, judge) -> None:
     fps_t, fps_n, fps = time.perf_counter(), 0, 0.0
     while not stop.is_set():
         t0 = time.perf_counter()
@@ -83,9 +84,36 @@ def _loop(camera, estimator, latest: Latest, encode_jpeg, stop: threading.Event,
             "people": [{"bbox": [round(v, 4) for v in p.bbox], "score": round(p.score, 3),
                         "kpts": np.round(p.keypoints, 4).tolist()} for p in people],
             "jpeg": base64.b64encode(jpeg).decode() if jpeg else None,
+            "judge": judge(people, t0) if judge else None,
         })
         if min_interval_s:
             stop.wait(max(0.0, min_interval_s - (time.perf_counter() - t0)))
+
+
+class Judge:
+    """F6·F7 판정을 화면 확인용으로 돌린다. 알람은 Supabase로 보내지 않고 메모리 가짜(MockRemote)에만 쌓인다.
+    로봇은 정지 상태로 가정 (ESP32 연결 없이 뷰어만 켜므로)."""
+
+    def __init__(self, settings) -> None:
+        from pi.app.adapters.mock import MockRemote
+        from pi.app.models.outbox import Outbox
+        from pi.app.services.sync import SyncService
+        from pi.app.services.vision.monitor import VisionMonitor
+
+        self.remote = MockRemote()
+        self.monitor = VisionMonitor.from_settings(settings, SyncService(Outbox(":memory:"), self.remote))
+        self.alarms: list[dict] = []
+
+    def __call__(self, people, now_s: float) -> dict:
+        pose = self.monitor.update(people, now_s, "idle", True)
+        while self.remote.executed:
+            pl = self.remote.executed.pop(0).payload
+            self.alarms.append({"at": time.strftime("%H:%M:%S"), "source": pl["p_source"],
+                                "confidence": pl["p_confidence"], "detail": pl["p_detail"]})
+            log.warning("판정 알람 (전송 안 함): %s", self.alarms[-1])
+        self.alarms = self.alarms[-5:]
+        return {"state": pose.state, "still_s": round(self.monitor.no_motion.still_s(now_s)),
+                "alarms": self.alarms}
 
 
 def make_handler(latest: Latest, video: bool):
@@ -152,7 +180,7 @@ def main() -> None:
 
     latest, stop = Latest(), threading.Event()
     worker = threading.Thread(target=run_loop, args=(camera, estimator, latest, encode_jpeg, stop, args.quality,
-                                    0.1 if args.mock else 0.0),
+                                    0.1 if args.mock else 0.0, Judge(s)),
                               daemon=True)
     server = ThreadingHTTPServer(("127.0.0.1", args.port), make_handler(latest, args.video))
     server.daemon_threads = True

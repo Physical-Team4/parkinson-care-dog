@@ -36,7 +36,10 @@
       <tr><td class="muted">프레임 처리 ms</td><td id="ms">–</td></tr>
       <tr><td class="muted">전처리 / 추론 / 후처리</td><td id="timing">–</td></tr>
       <tr><td class="muted">사람 수</td><td id="n">–</td></tr>
+      <tr><td class="muted">판정 상태 (F6)</td><td id="state" style="font-weight:700">–</td></tr>
+      <tr><td class="muted">안 움직인 시간 (F7)</td><td id="still">–</td></tr>
     </table>
+    <div id="alarms"></div>
     <div id="people"></div>
     <label>표시할 키포인트 최소 신뢰도 <b id="thv">0.30</b>
       <input id="th" type="range" min="0" max="1" step="0.05" value="0.3"></label>
@@ -96,6 +99,20 @@ function draw(d, video) {
   const tm = d.timing || {};
   document.getElementById('timing').textContent = 'infer_ms' in tm ? `${tm.pre_ms} / ${tm.infer_ms} / ${tm.post_ms}` : '–';
   document.getElementById('n').textContent = d.people.length;
+  const j = d.judge;
+  if (j) {
+    const st = document.getElementById('state');
+    const LABEL = {none: '사람 없음/판정 불가', standing: '서 있음', sitting: '앉음', falling: '쓰러짐 의심', lying: '누움'};
+    st.textContent = `${LABEL[j.state] || j.state} (${j.state})`;
+    st.style.color = j.state === 'falling' ? css('--mid') : j.state === 'lying' ? css('--low') : '';
+    document.getElementById('still').textContent = `${j.still_s}초`;
+    document.getElementById('alarms').innerHTML = j.alarms.length
+      ? '<div class="person"><b>알람 (전송 안 함, 최근 5개)</b>' + j.alarms.slice().reverse().map(a =>
+          `<div style="color:var(--low)">${a.at} ${a.source === 'camera' ? '낙상' : '무움직임'}` +
+          `${a.confidence != null ? ' conf ' + a.confidence.toFixed(2) : ''}` +
+          `<div class="muted">${Object.entries(a.detail || {}).map(([k, v]) => k + '=' + v).join(' ')}</div></div>`).join('') + '</div>'
+      : '';
+  }
 }
 
 async function loop() {
