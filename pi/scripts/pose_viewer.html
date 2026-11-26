@@ -131,7 +131,7 @@ function drawPersons(j, W, H) {
   ctx.font = 'bold 14px system-ui';
   for (const p of j.persons) {
     const [x1, , , y2] = p.bbox;
-    const txt = `${p.focus ? '★' : ''}P${p.id} ${LABEL[p.state] || p.state}${p.resting ? '·쉼' : ''}`;
+    const txt = `${p.focus ? '★' : ''}P${p.id} ${LABEL[p.state] || p.state}${p.resting ? '·쉼' : ''}${p.spot ? '·잠자리' : ''}`;
     ctx.fillStyle = p.state === 'falling' ? css('--mid') : p.state === 'lying' && !p.resting ? css('--low') : css('--box');
     ctx.fillText(txt, x1*W + 4, Math.min(H - 4, y2*H + 16));
   }

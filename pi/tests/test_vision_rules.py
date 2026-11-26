@@ -499,3 +499,89 @@ def test_sleep_mode_applies_to_new_person_and_clears_on_wake():
     for now2, people in timeline((2, lambda t: [pose("standing", t, frm="lying")]), (3, STAND)):
         mon.update(people, now + 0.1 + now2, "idle", True)
     assert mon.sleep_mode is None
+
+
+# ── 잠자리 마커 ──
+from dataclasses import replace as _replace  # noqa: E402
+from datetime import time as _time  # noqa: E402
+
+from pi.app.adapters.base import MarkerObs  # noqa: E402
+from pi.app.services.vision.monitor import in_hours, marker_near  # noqa: E402
+
+S_SPOT = _replace(S, sleep_marker_ids=(10,), sleep_hours=(_time(22, 0), _time(7, 0)))
+
+
+def marker(mid=10, cx=0.10, cy=0.80, half=0.02):
+    c = np.array([[cx - half, cy - half], [cx + half, cy - half], [cx + half, cy + half], [cx - half, cy + half]],
+                 np.float32)
+    return MarkerObs(mid, c, cx, 20.0, 640, 480)
+
+
+def spot_monitor(clock_time):
+    remote = mock.MockRemote()
+    mon = VisionMonitor.from_settings(S_SPOT, SyncService(Outbox(":memory:"), remote), clock=lambda: T0,
+                                      local_time=lambda: clock_time)
+    return mon, remote
+
+
+def run_spot(frames, clock_time=_time(23, 30), markers=(marker(),)):
+    mon, remote = spot_monitor(clock_time)
+    for now, people in frames:
+        mon.update(people, now, "idle", True, list(markers) if markers is not None else None)
+    return mon, [op.payload for op in remote.executed]
+
+
+def test_in_hours_crosses_midnight():
+    h = (_time(22, 0), _time(7, 0))
+    assert in_hours(_time(23, 30), h) and in_hours(_time(6, 59), h)
+    assert not in_hours(_time(7, 0), h) and not in_hours(_time(14, 0), h)
+    assert in_hours(_time(14, 0), (_time(0, 0), _time.max))
+
+
+def test_marker_near_bbox():
+    lying_box = (.15, .78, .92, .92)
+    assert marker_near(lying_box, marker(cx=0.10, cy=0.80), 0.5)     # 머리맡 (bbox 바로 왼쪽)
+    assert not marker_near(lying_box, marker(cx=0.50, cy=0.20), 0.5)  # 화면 위쪽 벽 멀리
+
+
+def test_found_lying_at_sleep_spot_at_night_no_alarm():
+    """밤에 요(잠자리 마커 옆)에 누운 사람을 발견 (눕는 과정 못 봄) → 잠, 알람 없음, F7도 끔."""
+    mon, sent = run_spot(timeline((S.fall_lying_only_s + 60, LIE), fps=2))
+    assert sent == [] and mon.resting and mon.people[0].at_sleep_spot
+
+
+def test_sleep_spot_ignored_outside_hours():
+    _, sent = run_spot(timeline((S.fall_lying_only_s + 2, LIE), fps=2), clock_time=_time(14, 0))
+    assert [p["p_detail"]["path"] for p in sent] == ["lying_only"]
+
+
+def test_lying_far_from_sleep_marker_alarms():
+    _, sent = run_spot(timeline((S.fall_lying_only_s + 2, LIE), fps=2), markers=(marker(cx=0.5, cy=0.2),))
+    assert [p["p_detail"]["path"] for p in sent] == ["lying_only"]
+
+
+def test_no_markers_passed_alarms():
+    _, sent = run_spot(timeline((S.fall_lying_only_s + 2, LIE), fps=2), markers=None)
+    assert [p["p_detail"]["path"] for p in sent] == ["lying_only"]
+
+
+def test_slow_lie_down_on_bedding_at_night_no_alarm():
+    """밤에 서 있다가 천천히 요에 눕기 (선언 없음) → 잠자리라 느린 하강도 잠."""
+    _, sent = run_spot(timeline((SETTLE, STAND), (4, lambda t: [pose("lying", t)]), (60, LIE)))
+    assert sent == []
+
+
+def test_fast_fall_at_sleep_spot_still_alarms():
+    _, sent = run_spot(timeline((SETTLE, STAND), (0.5, lambda t: [pose("lying", t)]), (8, LIE)))
+    assert [p["p_detail"]["path"] for p in sent] == ["descent"]
+
+
+def test_wants_markers_only_when_needed():
+    mon, _ = spot_monitor(_time(23, 30))
+    mon.update([pose("standing")], 0.0, "idle", True)
+    assert not mon.wants_markers                                  # 서 있음 → 마커 필요 없음
+    mon.update([pose("lying")], 0.1, "idle", True)
+    assert mon.wants_markers                                      # 누움 → 잠자리 확인 필요
+    day, _ = spot_monitor(_time(14, 0))
+    day.update([pose("lying")], 0.0, "idle", True)
+    assert not day.wants_markers                                  # 취침 시간 아님

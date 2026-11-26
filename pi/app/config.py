@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass, field
+from datetime import time
 from pathlib import Path
 
 try:
@@ -33,6 +34,23 @@ def _opt_int(value: str | None) -> int | None:
 
 def _opt_float(value: str | None) -> float | None:
     return float(value) if value not in (None, "") else None
+
+
+def _int_tuple(value: str | None) -> tuple[int, ...]:
+    """"10,11" → (10, 11). 비어 있으면 ()."""
+    return tuple(int(v) for v in (value or "").replace(" ", "").split(",") if v)
+
+
+def _hours(value: str | None) -> tuple[time, time] | None:
+    """"22:00-07:00" → (22:00, 07:00). 자정을 넘어도 됨. "24:00"은 하루 끝. 비어 있으면 None."""
+    if not value:
+        return None
+    a, b = value.replace(" ", "").split("-")
+
+    def t(x: str) -> time:
+        h, m = (int(v) for v in x.split(":"))
+        return time.max if (h, m) == (24, 0) else time(h, m)
+    return t(a), t(b)
 
 
 @dataclass(frozen=True)
@@ -83,6 +101,13 @@ class Settings:
     # 인쇄한 마커 한 변(cm), 카메라 초점거리(px). M0 실측(marker_test --at-cm) 후 .env에. None이면 거리·방향 추정 끔
     marker_size_cm: float | None = None
     camera_focal_px: float | None = None
+
+    # ── 잠자리 마커 (F6, docs/features.md) ──
+    # 요를 펴는 자리 머리맡에 붙인 마커 번호 (.env SLEEP_MARKER_IDS=10,11). 취침 시간대(.env SLEEP_HOURS=22:00-07:00)도
+    # 있어야 동작한다 (시간대 없이 쓰면 낮에 잠자리 근처에서 쓰러진 경우까지 잠으로 넘길 수 있음). 항상: 00:00-24:00
+    sleep_marker_ids: tuple[int, ...] = ()
+    sleep_hours: tuple[time, time] | None = None
+    sleep_marker_margin: float = 0.5        # 누운 사람 bbox를 가로·세로 크기의 이 비율만큼 넓힌 범위 안에 마커 중심이 있으면 "근처"
 
     # ── F6·F7 판정 (services/vision/). ⚠️ 전부 임시값 → 집에서 실측 후 조정 (docs/todo.md) ──
     # 비율은 모두 "사람 bbox 높이 대비" (거리와 무관). 각도는 몸통(어깨 중점→엉덩이 중점)과 수직선 사이.
@@ -168,6 +193,8 @@ def load_settings(env_file: Path | None = None) -> Settings:
         model_dir=model_dir,
         pose_hef=pose_hef,
         marker_size_cm=_opt_float(env.get("MARKER_SIZE_CM")),
+        sleep_marker_ids=_int_tuple(env.get("SLEEP_MARKER_IDS")),
+        sleep_hours=_hours(env.get("SLEEP_HOURS")),
         camera_focal_px=_opt_float(env.get("CAMERA_FOCAL_PX")),
         camera_hflip=_bool(env.get("CAMERA_HFLIP"), default=False),
         camera_vflip=_bool(env.get("CAMERA_VFLIP"), default=False),
