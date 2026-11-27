@@ -30,6 +30,23 @@ MP3_TRACK_ALARM = None
 MP3_TRACK_MEDICATION = None
 MP3_TRACK_PI_LOW = None     # TODO(D): "로봇 배터리를 충전해 주세요" 안내 (pi_low)
 
+# ── MechDog 배터리 → status.dog_battery_pct (docs/serial-protocol.md, drivers/battery.py) ──
+# Hiwonder.Battery_power() = mV. 2S LiPo 기준 6.4V = 0%, 8.4V = 100% (serial-protocol.md에 정한 값)
+DOG_BATTERY_EMPTY_MV = 6400
+DOG_BATTERY_FULL_MV = 8400
+# 이보다 높으면 LiPo가 아닌 외부 전원(예: 보조배터리 12V 출력에서 12660 고정, 2026-11-27) → None
+DOG_BATTERY_MAX_VALID_MV = 8900
+DOG_BATTERY_READ_MS = 5000
+
+# ── 넘어짐 → status.robot_tipped (services/tilt.py). IMU read_angle() 기울기 ──
+# 실측 2026-11-27 (D, 정지·서 있는 자세): 바닥 ±0.5°, 옆으로 눕힘 -60°, 앞뒤 34°/-42°, 뒤집기 ±178°.
+# 보행 중 흔들림은 아직 안 잼 → C와 F3 보행하며 확인 후 조정 (todo.md)
+TIP_ANGLE_DEG = 45          # X나 Y가 이 이상이면 넘어짐 후보
+TIP_HOLD_MS = 1000          # 그 상태가 이만큼 이어져야 넘어짐 (들거나 부딪힌 순간 무시)
+TIP_CLEAR_DEG = 30          # 둘 다 이 미만으로
+TIP_CLEAR_MS = 2000         # 이만큼 이어지면 해제
+TIP_READ_MS = 100
+
 # ── F1 복약 (Pi가 settings로 덮어씀) ──
 MED_TIMES_DEFAULT = ["08:00", "12:30", "18:00", "22:00"]
 MED_CONFIRM_TIMEOUT_MS = 30 * 60 * 1000

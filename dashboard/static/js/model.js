@@ -95,7 +95,10 @@ export function connectionRows(view){
     pi: on === null ? ["unknown", "확인 불가 (대시보드 인터넷 끊김)"] : on ? ["ok", "응답 중"] : ["off", "끊김"],
     esp: stale ? ["unknown", "알 수 없음 (로봇 신호 끊김)"] : s.esp32_ok ? ["ok", "응답 중"] : ["off", "응답 없음"],
     mode: stale ? "-" : (MODE_LABEL[s.mode] || (s.mode ? s.mode : "데이터 없음")),
-    dogBattery: has(s.dog_battery_pct) ? ["value", Math.round(s.dog_battery_pct)] : ["none", "미연동 (ESP32가 아직 안 보냄)"],
+    // ESP32는 충전기(외부 전원)가 꽂혀 있으면 전압으로 잔량을 알 수 없어 null + mode "charging"을 보낸다
+    dogBattery: has(s.dog_battery_pct) ? ["value", Math.round(s.dog_battery_pct)]
+      : s.mode === "charging" ? ["none", "🔌 충전 중 (잔량은 충전기를 뽑으면 보여요)"]
+      : ["none", "미연동 (ESP32가 아직 안 보냄)"],
     piBattery: has(s.pi_battery_pct) ? ["value", Math.round(s.pi_battery_pct)] : ["none", "측정 안 됨 (X1200 미연결)"],
     charging: s.pi_charging === true ? ["on", "충전기 연결됨 ⚡"] : s.pi_charging === false ? ["off", "충전기 없음"] : ["none", "데이터 없음"],
   };

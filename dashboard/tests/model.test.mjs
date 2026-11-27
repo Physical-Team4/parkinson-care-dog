@@ -60,6 +60,11 @@ test("connectionRows: 안 보낸 값은 측정값처럼 보이지 않게 미연�
   const off = M.connectionRows({...v, online: false});
   assert.equal(off.esp[0], "unknown");
   assert.equal(off.mode, "-");
+  // 로봇 충전 중: ESP32가 외부 전원을 감지하면 mode "charging" + 잔량 null
+  const chg = M.connectionRows({...v, status: {...v.status, mode: "charging"}});
+  assert.equal(chg.mode, "충전 중");
+  assert.match(chg.dogBattery[1], /충전 중/);
+  assert.deepEqual(M.connectionRows({...v, status: {...v.status, mode: "charging", dog_battery_pct: 80}}).dogBattery, ["value", 80]);
 });
 
 test("syncView: 대시보드 오프라인 / 로봇 오프라인 / 정상 + 지연 도착 건수", () => {

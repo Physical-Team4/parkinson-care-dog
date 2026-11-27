@@ -45,15 +45,19 @@
 | `gait_end` | `started_ms`, `ended_ms`, `avg_bpm`, `stop_count`, `restart_count` | F3 세션 종료 요약 | 발생 시 |
 | `ack` | `id`, `ok`, `err?` | 명령 응답 | — |
 
-- `mode`: `idle` / `walking` / `paused`(ToF 대기) / `medication` / `alarm` (초안)
+- `mode`: `idle` / `walking` / `paused`(ToF 대기) / `medication` / `alarm` / `charging` (초안)
+  - `charging` (2026-11-27 추가, D): 대기 중에 전원 전압이 `DOG_BATTERY_MAX_VALID_MV`보다 높음 = 충전기·외부 전원 연결. 이때 `dog_battery_pct`는 `null`.
+    우선순위 보행 > 복약 알림 > 충전 > 대기. 멈춰 있는 모드라 F7 누적에는 영향 없음 (이동 모드 아님). 대시보드는 "충전 중"으로 표시.
 - F1 복약 (`esp32/services/medication.py`):
   - `now`를 한 번도 못 받았으면 복약 알림을 하지 않는다 (`# warn:` 출력). 시각을 추측하지 않는다.
   - 복약 시각이 되면 `med_due` 1번 + MP3 `MP3_TRACK_MEDICATION`. 시각을 막 맞췄을 때 30분 안에 지난 복약은 바로 알리고, 그보다 오래된 것은 건너뛴다.
   - 대기 중 짧은 터치 → `med_ok`(`method:"touch"`). Pi의 `med_ack`(음성)는 대기만 끝내고 `med_ok`는 보내지 않는다 (Pi가 이미 앎).
   - `MED_CONFIRM_TIMEOUT_MS`(30분) 안에 확인이 없거나 다음 복약 시각이 먼저 오면 `med_missed`. 이때 Pi 무응답이면 MP3 경보.
 - `dog_battery_pct`: MechDog 배터리 전압을 2S 기준 약 6.4V = 0%, 8.4V = 100%로 직선 변환 (두 값은 `esp32/config.py`).
-  보드에서 전압을 읽는 Python API는 확인 필요 ([mechdog-motion.md](mechdog-motion.md#배터리-전압)).
-- `robot_tipped`: IMU `read_angle()` 기울기(X·Y)가 임계값(`esp32/config.py`)을 넘으면 true. IMU는 기울기만 주고 방향(yaw)은 없음.
+  전압은 펌웨어 `Hiwonder.Battery_power()`(mV, 2026-11-27 확인). `DOG_BATTERY_MAX_VALID_MV`(8.9V)보다 높으면 LiPo가 아닌 외부 전원(보조배터리 등)으로 보고 `null` ([mechdog-motion.md](mechdog-motion.md#배터리-전압)).
+- `robot_tipped` (`esp32/services/tilt.py`): IMU `read_angle()` 기울기 X(좌우)나 Y(앞뒤)가 `TIP_ANGLE_DEG`(45°) 이상인 상태가
+  `TIP_HOLD_MS`(1초) 이어지면 true, 둘 다 `TIP_CLEAR_DEG`(30°) 미만으로 `TIP_CLEAR_MS`(2초) 이어지면 false (잠깐 들거나 부딪힌 것은 무시).
+  IMU를 못 쓰면 `null`. IMU는 기울기만 주고 방향(yaw)은 없음. true가 되면 Supabase 트리거가 `robot_tipped` 알람(warning)을 만든다.
 
 ## 제안 중 (합의 전, 아직 구현 안 함)
 - **로봇 이동** (A, 2026-11-27): `nav_move`(보폭 mm·각도 °·TTL)·`nav_stop`, `nav_blocked`, `status.front_cm`, `mode: navigating`,
