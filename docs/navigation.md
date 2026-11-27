@@ -197,8 +197,8 @@ python -m pi.scripts.marker_test --marker-cm 12 --at-cm 100 --seconds 10        
 | 15cm | 50cm | 100% | 252.3 | 841 | 모니터 표시, 카메라 수동 지지, 정면 (B 장비) |
 | 15cm | 100cm | 100% | 138.0 | 920 | 〃 |
 | 15cm | 200cm | 100% | 92.3 | 1230 | 〃 |
-| 15cm | 300cm | 0% | — | — | 〃 |
-| | 400cm | | | | 미측정 |
+| | 300cm | | | | 보류 |
+| | 400cm | | | | 보류 |
 
 1차 관측 (2026-11-27, B 장비, `marker_test.py` 단독): 상세 조건·회차별 차이·한계는
 [validation/2026-11-27-camera-aruco-marker-validation.md](validation/2026-11-27-camera-aruco-marker-validation.md).
