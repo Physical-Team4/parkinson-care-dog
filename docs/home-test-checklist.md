@@ -29,6 +29,7 @@ cat .env                               # POSE_HEF, CAMERA_HFLIP/VFLIP 확인
 ```bash
 # Pi
 python -m pi.scripts.pose_viewer --video --markers
+# (AI HAT+ 없는 Pi: 마커만) python -m pi.scripts.pose_viewer --video --markers-only
 # 노트북 (새 창, 켜 둔 채로)
 ssh -L 8765:127.0.0.1:8765 jjjkk24@<pi 주소>
 # 브라우저: http://localhost:8765

@@ -74,3 +74,28 @@ def test_viewer_sends_markers():
         worker.join(2)
         server.shutdown()
         server.server_close()
+
+
+def test_viewer_markers_only_without_pose():
+    """--markers-only: 포즈 추론·판정 없이 마커만 보낸다 (Hailo 없는 Pi용)."""
+    from pi.scripts.pose_viewer import Latest, MarkerView, NoPose, make_handler, run_loop
+    m = MarkerObs(7, np.array([[.6, .4], [.7, .4], [.7, .5], [.6, .5]], np.float32), 0.65, 48.0, 640, 480)
+    latest, stop = Latest(), threading.Event()
+    view = MarkerView(mock.MockMarkerDetector([[m]]), marker_cm=None, focal_px=None)
+    worker = threading.Thread(target=run_loop, args=(mock.MockCamera(), NoPose(), latest, None,
+                                                     stop, 60, 0.01, None, view))
+    server = ThreadingHTTPServer(("127.0.0.1", 0), make_handler(latest, video=False))
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    worker.start()
+    try:
+        r = json.loads(urllib.request.urlopen(f"http://127.0.0.1:{server.server_address[1]}/latest?after=0").read())
+        d = r["d"]
+        assert d["people"] == [] and d["judge"] is None and d["jpeg"] is None and d["timing"] == {}
+        [got] = d["markers"]["list"]
+        assert got["id"] == 7 and got["side_px"] == 48.0
+        assert got["dist_cm"] is None and got["bearing_deg"] is None   # 설정 없으면 거리·방향 끔
+    finally:
+        stop.set()
+        worker.join(2)
+        server.shutdown()
+        server.server_close()

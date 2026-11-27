@@ -4,6 +4,7 @@
     python -m pi.scripts.pose_viewer --hef ~/pd-dog-models/hailo8l/yolov8s_pose.hef            # 뼈대만
     python -m pi.scripts.pose_viewer --hef ~/pd-dog-models/hailo8l/yolov8s_pose.hef --video    # 카메라 화면 + 뼈대
     python -m pi.scripts.pose_viewer --markers --video                                         # + 로봇 이동 마커 표시
+    python -m pi.scripts.pose_viewer --markers-only --video                                    # Hailo 없이 카메라 + 마커만
     # 노트북
     ssh -L 8765:127.0.0.1:8765 <user>@<pi>     → 브라우저 http://localhost:8765
 
@@ -92,6 +93,16 @@ def _loop(camera, estimator, latest: Latest, encode_jpeg, stop: threading.Event,
         })
         if min_interval_s:
             stop.wait(max(0.0, min_interval_s - (time.perf_counter() - t0)))
+
+
+class NoPose:
+    """--markers-only용: 포즈 추론 없이 항상 사람 없음 (Hailo·HEF 불필요)."""
+
+    def infer(self, frame) -> list:
+        return []
+
+    def close(self) -> None:
+        pass
 
 
 class Judge:
@@ -190,7 +201,13 @@ def main() -> None:
     ap.add_argument("--port", type=int, default=8765)
     ap.add_argument("--mock", action="store_true", help="하드웨어 없이 (PC에서 화면 확인용)")
     ap.add_argument("--markers", action="store_true", help="로봇 이동 마커(ArUco) 인식·표시 (CPU 추가 사용)")
+    ap.add_argument("--markers-only", action="store_true",
+                    help="포즈 추론 없이 카메라 + 마커만 (Hailo·HEF 불필요, F6·F7 판정 끔)")
     args = ap.parse_args()
+    if args.markers_only:
+        if args.hef:
+            ap.error("--markers-only는 포즈 추론을 하지 않으므로 --hef와 같이 쓸 수 없습니다.")
+        args.markers = True
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
     s = load_settings()
 
@@ -200,7 +217,12 @@ def main() -> None:
         from pi.app.adapters.base import PersonPose
         k = np.array([[0.5, 0.2 + 0.04 * i, 0.9] for i in range(17)], np.float32)  # 대충 세로로 선 사람
         camera = mock.MockCamera(s.camera_width, s.camera_height)
-        estimator = mock.MockPoseEstimator([[PersonPose((0.4, 0.15, 0.6, 0.9), 0.9, k)]])
+        estimator = (NoPose() if args.markers_only
+                     else mock.MockPoseEstimator([[PersonPose((0.4, 0.15, 0.6, 0.9), 0.9, k)]]))
+    elif args.markers_only:
+        from pi.app.adapters.camera import PiCamera
+        estimator = NoPose()
+        camera = PiCamera((s.camera_width, s.camera_height), s.camera_hflip, s.camera_vflip)
     else:
         from pi.app.adapters.camera import PiCamera
         from pi.app.adapters.hailo import HailoPoseEstimator
@@ -227,8 +249,11 @@ def main() -> None:
         if not (s.marker_size_cm and s.camera_focal_px):
             log.warning("MARKER_SIZE_CM·CAMERA_FOCAL_PX 미설정 → 마커 거리·방향 추정 끔 (M0 측정 후 .env)")
 
-    latest, stop, judge = Latest(), threading.Event(), Judge(s, marker_view)
-    if s.sleep_marker_ids and not args.markers:
+    latest, stop = Latest(), threading.Event()
+    judge = None if args.markers_only else Judge(s, marker_view)
+    if args.markers_only:
+        log.info("--markers-only: 포즈 추론·F6·F7 판정 끔 (Hailo 없이 카메라 + 마커만)")
+    elif s.sleep_marker_ids and not args.markers:
         log.warning("잠자리 마커가 설정돼 있지만 --markers가 꺼져 있음 → 잠자리 판단 안 함")
     worker = threading.Thread(target=run_loop, args=(camera, estimator, latest, encode_jpeg, stop, args.quality,
                                     0.1 if args.mock else 0.0, judge, marker_view),
