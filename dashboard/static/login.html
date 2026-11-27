@@ -54,12 +54,13 @@ button{font:inherit;cursor:pointer;border:1px solid var(--brand);border-radius:1
 </main>
 <script src="/config.js"></script>
 <script type="module">
-import {createStore} from "/js/store.js";
+import {createStore, devSignIn} from "/js/store.js";
 import {errorMessage} from "/js/model.js";
 const $ = id => document.getElementById(id);
 const showErr = text => { $("err").textContent = text; $("err").hidden = false; };
 const store = await createStore().catch(e => { showErr("로그인 기능을 불러오지 못했어요: " + errorMessage(e)); return null; });
 if (store && (store.mode === "mock" || await store.session().catch(() => null))) location.replace("/");
+else if (store && await devSignIn(store).catch(e => { showErr("자동 로그인 실패: " + errorMessage(e)); return false; })) location.replace("/");
 $("form").addEventListener("submit", async ev => {
   ev.preventDefault();
   if (!store) return;

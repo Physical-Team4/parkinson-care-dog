@@ -19,7 +19,11 @@ cd dashboard
 python server.py              # http://127.0.0.1:8000  (.env에 키가 있으면 Supabase, 없으면 Mock)
 python server.py --mock       # Supabase 없이 예시 데이터 + 시연 패널(가상 로봇·인터넷 끊김 흉내)
 python server.py --host 0.0.0.0   # 같은 와이파이의 휴대폰에서 보기
+python server.py --dev-login      # 개발용: 로그인 화면 없이 테스트 계정으로 자동 로그인 (아래)
 ```
+- `--dev-login`: `.env`의 `DASHBOARD_DEV_EMAIL`·`DASHBOARD_DEV_PASSWORD`(**테스트 계정만**)로 자동 로그인.
+  계정 비밀번호가 `/config.js`로 브라우저에 가므로 **127.0.0.1에서만** 켜진다 (`--host 0.0.0.0`과 같이 쓰면 시작 거부,
+  다른 기기에서 온 요청에는 넣지 않음). DB 권한(RLS)은 그대로. 시연·실사용에서는 쓰지 않는다.
 - 로그인: Supabase Auth 이메일·비밀번호. **초대받고 `care_team`에 등록된 계정만** 데이터가 보인다 ([docs/setup.md](../docs/setup.md) 3번).
 - 브라우저는 `supabase-js@2.45.4`를 jsDelivr에서 받는다 (Supabase 모드만, 버전 고정). Mock 모드는 인터넷 없이 동작.
 
@@ -27,7 +31,7 @@ python server.py --host 0.0.0.0   # 같은 와이파이의 휴대폰에서 보�
 ```bash
 cd dashboard
 node --test "tests/*.test.mjs"           # Model·Mock store (22개)
-python -m unittest -v test_server.py     # 서버: 설정 주입·secret 키 거부·정적 파일만 (15개)
+python -m unittest -v test_server.py     # 서버: 설정 주입·secret 키 거부·정적 파일·자동 로그인 제한 (16개)
 ```
 브라우저 E2E(Mock·Supabase) 결과는 [progress.md](progress.md).
 
@@ -50,6 +54,7 @@ tests/                    node 테스트
 | 화면 | 읽기·쓰기 | 주기 |
 |---|---|---|
 | 알람 상태·기록·확인 메모 | `alerts` + Realtime `postgres_changes`, `rpc ack_alert` | Realtime + 5초 확인 (id로 합쳐 중복 없음) |
+| 알람 모두 확인 (미확인 2건 이상) | `rpc ack_alert`를 건마다, 메모 "모두 확인". **삭제 아님** (기록 보존, 대시보드는 삭제 권한 없음) | 누를 때 (한 번 더 묻기) |
 | 로봇 연결·배터리·모드·충전·마지막 통신 | `robot_latest` | 2초 |
 | 따라오는 거리 1분 그래프 | `robot_status` (최근 60초) | 2초 |
 | 자세 보기 (키포인트, 영상 없음) | Realtime Broadcast `robot:pose` (private) | **버튼을 눌렀을 때만**, 탭 숨김·페이지 이동·5분 뒤 자동 중단 |

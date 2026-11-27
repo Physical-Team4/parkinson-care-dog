@@ -27,9 +27,18 @@ export async function requireLogin(store){
   if (store.mode === "mock") return true;
   try{
     if (await store.session()) return true;
+    if (await devSignIn(store)) return true;
   }catch(e){ /* 세션 확인 실패 → 로그인 화면에서 다시 */ }
   location.href = "/login";
   return false;
+}
+
+/** 개발용 자동 로그인 (server.py --dev-login, 127.0.0.1에서만 config에 들어옴). 성공하면 true */
+export async function devSignIn(store){
+  const dev = (window.PD_CONFIG || {}).devLogin;
+  if (!dev || store.mode !== "supabase") return false;
+  await store.signIn(dev.email, dev.password);
+  return true;
 }
 
 /** 오류 화면에 공통으로 쓰는 "데이터 소스" 표시 문구 */

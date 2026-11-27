@@ -89,6 +89,26 @@ def load_config(env: Mapping[str, str]) -> dict:
     return {"dataSource": "supabase", "supabaseUrl": url, "supabaseAnonKey": key}
 
 
+LOOPBACK = ("127.0.0.1", "localhost", "::1")
+
+
+def add_dev_login(config: dict, env: Mapping[str, str], host: str) -> dict:
+    """개발용 자동 로그인 (--dev-login). 이 컴퓨터(127.0.0.1)에서만, 테스트 계정으로만.
+
+    계정 비밀번호가 /config.js로 브라우저에 가므로 다른 기기에서 접속할 수 있는 주소(0.0.0.0 등)에서는 거부한다.
+    DB 권한(RLS)은 그대로 — 이 계정이 care_team에 있어야 데이터가 보인다.
+    """
+    if config.get("dataSource") != "supabase":
+        return config   # Mock은 원래 로그인 없음
+    if host not in LOOPBACK:
+        raise ConfigError("--dev-login은 --host 127.0.0.1 에서만 쓸 수 있어요 (다른 기기에 계정이 노출됨)")
+    email = (env.get("DASHBOARD_DEV_EMAIL") or "").strip()
+    password = env.get("DASHBOARD_DEV_PASSWORD") or ""
+    if not email or not password:
+        raise ConfigError("--dev-login에는 DASHBOARD_DEV_EMAIL, DASHBOARD_DEV_PASSWORD가 필요해요 (.env, 테스트 계정만)")
+    return {**config, "devLogin": {"email": email, "password": password}}
+
+
 def csp(config: dict) -> str:
     connect = "'self'"
     if config.get("dataSource") == "supabase":
@@ -119,7 +139,10 @@ class Handler(BaseHTTPRequestHandler):
     def _serve(self, send_body: bool):
         path = unquote(urlsplit(self.path).path)
         if path == "/config.js":
-            body = ("window.PD_CONFIG = " + json.dumps(self.server.config) + ";\n").encode("utf-8")
+            config = self.server.config
+            if "devLogin" in config and self.client_address[0] not in ("127.0.0.1", "::1"):
+                config = {k: v for k, v in config.items() if k != "devLogin"}   # 한 번 더 막기
+            body = ("window.PD_CONFIG = " + json.dumps(config) + ";\n").encode("utf-8")
             return self._send(200, body, TYPES[".js"], send_body)
         file = STATIC / PAGES[path] if path in PAGES else (STATIC / path.lstrip("/")).resolve()
         if (not file.is_relative_to(STATIC) or file.suffix not in TYPES
@@ -158,6 +181,8 @@ def main(argv=None) -> int:
     parser.add_argument("--port", type=int, default=8000, help="포트 번호 (기본: 8000)")
     parser.add_argument("--env-file", default=str(DEFAULT_ENV_FILE), help="설정 파일 (기본: 레포 루트 .env)")
     parser.add_argument("--mock", action="store_true", help="Supabase 없이 Mock 데이터로 실행")
+    parser.add_argument("--dev-login", action="store_true",
+                        help="개발용: 로그인 화면 없이 테스트 계정(DASHBOARD_DEV_EMAIL/PASSWORD)으로 자동 로그인. 127.0.0.1에서만")
     args = parser.parse_args(argv)
 
     import os
@@ -166,6 +191,8 @@ def main(argv=None) -> int:
         env["DASHBOARD_DATA_SOURCE"] = "mock"
     try:
         config = load_config(env)
+        if args.dev_login:
+            config = add_dev_login(config, env, args.host)
     except ConfigError as e:
         print("설정 오류:", e)
         return 1
@@ -178,6 +205,8 @@ def main(argv=None) -> int:
     shown = "127.0.0.1" if args.host in ("0.0.0.0", "") else args.host
     mode = "Supabase 연결" if config["dataSource"] == "supabase" else "Mock (Supabase 없이 예시 데이터)"
     print(f"PD-Dog 대시보드 실행 중: http://{shown}:{port}  · 데이터: {mode}", flush=True)
+    if "devLogin" in config:
+        print(f"개발용 자동 로그인 켜짐: {config['devLogin']['email']} (이 컴퓨터에서만)", flush=True)
     print("끄려면 Ctrl+C", flush=True)
     try:
         server.serve_forever()

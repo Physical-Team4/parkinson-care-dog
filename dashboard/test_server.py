@@ -62,6 +62,18 @@ class ConfigTest(unittest.TestCase):
             self.assertEqual(server.read_env_file(p), {"SUPABASE_URL": "https://x.supabase.co", "SUPABASE_ANON_KEY": "k"})
         self.assertEqual(server.read_env_file(Path(d) / "없음"), {})
 
+    def test_dev_login_only_on_loopback_with_both_values(self):
+        cfg = server.load_config({"SUPABASE_URL": URL, "SUPABASE_ANON_KEY": ANON})
+        env = {"DASHBOARD_DEV_EMAIL": "t@example.com", "DASHBOARD_DEV_PASSWORD": "pw"}
+        self.assertEqual(server.add_dev_login(cfg, env, "127.0.0.1")["devLogin"], {"email": "t@example.com", "password": "pw"})
+        for host in ("0.0.0.0", "192.168.0.5", ""):
+            with self.assertRaises(server.ConfigError):
+                server.add_dev_login(cfg, env, host)
+        with self.assertRaises(server.ConfigError):
+            server.add_dev_login(cfg, {"DASHBOARD_DEV_EMAIL": "t@example.com"}, "127.0.0.1")
+        self.assertNotIn("devLogin", cfg)                                          # 플래그 없으면 안 들어감
+        self.assertEqual(server.add_dev_login({"dataSource": "mock"}, env, "0.0.0.0"), {"dataSource": "mock"})
+
     def test_csp_allows_only_supabase_and_pinned_cdn(self):
         c = server.csp({"dataSource": "supabase", "supabaseUrl": URL})
         self.assertIn(f"connect-src 'self' {URL} wss://example.supabase.co", c)

@@ -260,7 +260,15 @@ footer{font-size:12.5px;color:var(--muted);text-align:center;padding:8px 0 24px}
     <p class="big" id="statusText">확인 중…</p>
     <div id="statusSub" class="muted"></div>
     <div id="active" style="display:grid;gap:10px"></div>
-    <div class="actions"><button id="soundBtn" aria-pressed="false">🔔 알람 소리 켜기</button></div>
+    <div class="actions">
+      <button id="soundBtn" aria-pressed="false">🔔 알람 소리 켜기</button>
+      <button id="ackAllBtn" type="button" hidden>✔ 모두 확인</button>
+      <span id="ackAllAsk" class="actions" hidden style="align-items:center">
+        <b id="ackAllText"></b>
+        <button id="ackAllYes" type="button">예, 모두 확인</button>
+        <button id="ackAllNo" type="button">취소</button>
+      </span>
+    </div>
     <div class="muted" id="message" aria-live="polite"></div>
   </div>
 
@@ -606,6 +614,11 @@ function render(data){
     : "로봇 상태를 확인한 뒤 \"확인\"을 눌러 주세요";
   document.title = alarmLevel === "crit" ? "🚨 위급! — PD-Dog" : alarmLevel === "warn" ? "⚠️ 주의 — PD-Dog" : "PD-Dog 돌봄 대시보드";
   renderActive(active);
+  const asking = !$("ackAllAsk").hidden;
+  if (active.length < 2) $("ackAllAsk").hidden = true;
+  $("ackAllBtn").hidden = active.length < 2 || asking;
+  $("ackAllBtn").textContent = `✔ 알람 ${active.length}건 모두 확인`;
+  $("ackAllText").textContent = `미확인 알람 ${active.length}건을 모두 확인 처리할까요?` + (hasCrit ? " (위급 알람 포함 — 환자 상태를 먼저 확인하세요)" : "");
 
   // 오늘 요약 (최근 기록 기준)
   const today = evs.filter(e => isToday(e.created_at));
@@ -659,6 +672,24 @@ async function acknowledge(id, btn, note){
   }
   refresh();
 }
+
+// 모두 확인: 알람은 지우지 않고(기록 보존, DB도 삭제 권한 없음) 미확인 알람을 ack_alert로 하나씩 확인 처리
+$("ackAllBtn").addEventListener("click", () => { $("ackAllAsk").hidden = false; $("ackAllBtn").hidden = true; });
+$("ackAllNo").addEventListener("click", () => { $("ackAllAsk").hidden = true; lastData = ""; draw(); });
+$("ackAllYes").addEventListener("click", async () => {
+  const ids = events.filter(e => e.status === "new").map(e => e.id);
+  $("ackAllYes").disabled = $("ackAllNo").disabled = true;
+  let done = 0, failed = 0;
+  for (const id of ids){
+    try{ if (await store.ackAlert(id, "모두 확인")) done++; }catch(e){ failed++; }
+    drafts.delete(id);
+  }
+  $("message").textContent = failed ? `${done}건 확인 처리, ${failed}건 실패했어요. 다시 시도해 주세요.`
+    : `알람 ${done}건을 모두 확인 처리했어요. 기록은 아래 표에 남아 있어요.`;
+  $("ackAllYes").disabled = $("ackAllNo").disabled = false;
+  $("ackAllAsk").hidden = true;
+  refresh();
+});
 
 // 시연 패널 (Mock 전용): 로봇 대신 신호 보내기 (기록에 "시연"으로 남아요)
 document.querySelectorAll("#demoPanel [data-source]").forEach(b => b.addEventListener("click", () => {
