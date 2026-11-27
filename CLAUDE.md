@@ -18,6 +18,8 @@ Pi ↔ ESP32는 USB 시리얼 케이블 하나. 데이터는 Supabase(PostgreSQL
 | 대시보드 API ↔ Supabase 대응 | [docs/api.md](docs/api.md) |
 | DB·RLS·오프라인 대기열 | [docs/db.md](docs/db.md), [db/](db/) |
 | Pi ↔ ESP32 메시지 | [docs/serial-protocol.md](docs/serial-protocol.md) |
+| 로봇 이동 (마커 길찾기) | [docs/navigation.md](docs/navigation.md) |
+| 집 실측 순서 (비전·마커·M0) | [docs/home-test-checklist.md](docs/home-test-checklist.md) |
 | 결정 기록 | [docs/decisions.md](docs/decisions.md) |
 | 팀 역할·담당 폴더 | [docs/team.md](docs/team.md) |
 | 미확정 항목 | [docs/todo.md](docs/todo.md) |

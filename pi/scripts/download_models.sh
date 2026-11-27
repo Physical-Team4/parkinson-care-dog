@@ -4,6 +4,7 @@
 #   bash pi/scripts/download_models.sh --probe                 # 1) 어떤 Model Zoo 버전이 이 Pi(HailoRT)에서 열리는지 확인
 #   MZ_VERSION=v2.xx.0 bash pi/scripts/download_models.sh      # 2) 고른 버전으로 받기 (기본 모델: yolov8s_pose yolov8m_pose)
 #   MZ_VERSION=v2.xx.0 bash pi/scripts/download_models.sh yolov8s_pose   # 모델 지정
+#   MZ_VERSION=v2.20.0 bash pi/scripts/download_models.sh yolov8s        # 일반 물체 검출 (가구 확인, pi/scripts/furniture_check.py)
 #
 # 저장 위치: ${PD_DOG_MODEL_DIR:-~/pd-dog-models}/hailo8l/<모델>.hef  (+ 같은 폴더 SOURCES.txt에 출처·sha256)
 # .env에 POSE_HEF=hailo8l/<모델>.hef 로 고른 모델을 지정한다.

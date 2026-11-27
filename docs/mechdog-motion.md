@@ -16,9 +16,14 @@ time.sleep(1)
 ## 걷기
 
 ```python
-mechdog.move(속도, 방향)   # 속도: +앞 / -뒤, 방향: 회전량
+mechdog.move(보폭, 각도)   # 보폭: mm, -100~100 (+앞 / -뒤), 각도: 도, -30~30 (양수 = 왼쪽)
 mechdog.move(0, 0)         # 멈춤
 ```
+
+- 단위·범위는 Hiwonder 위키 기준 (2026-11-27 확인).
+- **제자리 회전 API는 문서에 없다.** 공식 시리얼 이동 명령도 전진/후진 + 회전 조합 8종뿐이고 제자리 회전은 없다.
+  → `move(0, 각도)`, `move(1, 30)`(보폭 1mm = 제자리걸음에 가까움)으로 되는지 [navigation.md](navigation.md) M0에서 시험.
+- 아래 원본 코드는 각도 ±40·±50도 쓰는데 위키 범위는 -30~30 → 범위 밖 값이 잘리는지·오류인지 M0에서 확인.
 
 원본 코드에서 쓰는 값:
 
@@ -87,6 +92,25 @@ mechdog.read_homeostasis_status()    # 작동 중인지 확인
 ```
 
 - 보드 내장 자세 센서(IMU) 사용: IIC(1), 주소 106 (0x6A)
+
+## 자세 센서 (IMU) 읽기
+
+```python
+import Hiwonder_IIC
+imu = Hiwonder_IIC.MPU()
+imu.read_angle()        # 기울기 (X·Y)
+```
+
+- 위키 기준 **기울기(X·Y)만 제공**한다. 자이로(회전 속도)·yaw(향하는 방향) API는 없다 (2026-11-27 확인).
+  → 로봇 이동에서 방향은 IMU가 아니라 **마커를 보며 바로잡는다** ([navigation.md](navigation.md)).
+- `robot_tipped`(넘어짐)는 `read_angle()` 기울기가 임계값을 넘는지로 판단한다. 임계값은 `esp32/config.py` (M0에서 측정).
+- 참고: 공식 시리얼 명령 `CMD|5|$`도 같은 값을 준다. 단 **공식 슬레이브 UART 프로토콜은 우리 프로젝트에서 사용 금지**
+  ([esp32/CLAUDE.md](../esp32/CLAUDE.md)) → 단위 참고용으로만 적는다.
+
+## 배터리 전압
+
+- 공식 시리얼 `CMD|6|$`는 **mV**를 준다 (참고용, 위 이유로 사용하지 않음). Python에서 읽는 API는 아직 확인 안 함 (TODO).
+- 대시보드 `dog_battery_pct` 변환: 2S LiPo 기준 **약 6.4V = 0%, 8.4V = 100%** 사이 직선 변환. 두 전압은 `esp32/config.py` 설정값으로 둔다.
 
 ## F3 박자음 (MP3 모듈)
 

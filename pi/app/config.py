@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass, field
+from datetime import time
 from pathlib import Path
 
 try:
@@ -29,6 +30,27 @@ def _int(value: str | None, default: int) -> int:
 
 def _opt_int(value: str | None) -> int | None:
     return int(value) if value not in (None, "") else None
+
+
+def _opt_float(value: str | None) -> float | None:
+    return float(value) if value not in (None, "") else None
+
+
+def _int_tuple(value: str | None) -> tuple[int, ...]:
+    """"10,11" → (10, 11). 비어 있으면 ()."""
+    return tuple(int(v) for v in (value or "").replace(" ", "").split(",") if v)
+
+
+def _hours(value: str | None) -> tuple[time, time] | None:
+    """"22:00-07:00" → (22:00, 07:00). 자정을 넘어도 됨. "24:00"은 하루 끝. 비어 있으면 None."""
+    if not value:
+        return None
+    a, b = value.replace(" ", "").split("-")
+
+    def t(x: str) -> time:
+        h, m = (int(v) for v in x.split(":"))
+        return time.max if (h, m) == (24, 0) else time(h, m)
+    return t(a), t(b)
 
 
 @dataclass(frozen=True)
@@ -74,6 +96,71 @@ class Settings:
     pose_iou_threshold: float = 0.7
     pose_max_people: int = 3
 
+    # ── 로봇 이동: 마커 (docs/navigation.md) ──
+    marker_dict: str = "DICT_4X4_50"
+    # 인쇄한 마커 한 변(cm), 카메라 초점거리(px). M0 실측(marker_test --at-cm) 후 .env에. None이면 거리·방향 추정 끔
+    marker_size_cm: float | None = None
+    camera_focal_px: float | None = None
+
+    # ── 잠자리 마커 (F6, docs/features.md) ──
+    # 요를 펴는 자리 머리맡에 붙인 마커 번호 (.env SLEEP_MARKER_IDS=10,11). 취침 시간대(.env SLEEP_HOURS=22:00-07:00)도
+    # 있어야 동작한다 (시간대 없이 쓰면 낮에 잠자리 근처에서 쓰러진 경우까지 잠으로 넘길 수 있음). 항상: 00:00-24:00
+    sleep_marker_ids: tuple[int, ...] = ()
+    sleep_hours: tuple[time, time] | None = None
+    sleep_marker_margin: float = 0.5        # 누운 사람 bbox를 가로·세로 크기의 이 비율만큼 넓힌 범위 안에 마커 중심이 있으면 "근처"
+
+    # ── F6·F7 판정 (services/vision/). ⚠️ 전부 임시값 → 집에서 실측 후 조정 (docs/todo.md) ──
+    # 비율은 모두 "사람 bbox 높이 대비" (거리와 무관). 각도는 몸통(어깨 중점→엉덩이 중점)과 수직선 사이.
+    vision_kpt_min_conf: float = 0.5        # 이 이상이어야 "보이는 관절"
+    # 여러 사람 추적: 박스 겹침(IoU) ≥ 이 값이면 같은 사람. 아니면 중심 거리/이전 박스 높이 ≤ center_max_ratio
+    track_iou_min: float = 0.3
+    track_center_max_ratio: float = 0.8
+    # 공통: 어깨 1개 이상 + 엉덩이 1개 이상 보여야 판정. 아니면 "판정 불가" (팔만 보이는 경우 등)
+    vision_lost_tolerance_s: float = 2.0    # 판정 불가 프레임이 이 시간 이내면 직전 상태 유지
+    # F6 자세
+    fall_lying_angle_deg: float = 60.0      # 몸통 각도 ≥ 이 값 → 누움 후보
+    fall_lying_min_aspect: float | None = 1.0   # 누움은 bbox 가로/세로 ≥ 이 값도 필요 (숙인 자세 제외). None=안 봄
+    sit_thigh_max_ratio: float = 0.5        # |무릎y-엉덩이y| / 몸통 길이 < 이 값 → 앉음 (허벅지가 수평)
+    # F6 쓰러짐
+    fall_descent_window_s: float = 1.0      # 이 시간 안에
+    fall_descent_ratio: float = 0.4         # 머리가 (서 있을 때 키의) 이 비율 이상 내려가면 "쓰러지는 중"
+    fall_confirm_window_s: float = 10.0     # 쓰러지는 중 시작 후 이 시간 안에
+    fall_confirm_lying_s: float = 3.0       # 누운 자세가 이만큼 이어지면 낙상 확정
+    # F6 느린 낙상 vs 스스로 눕기 (엉덩이 높이). 앉기·서기를 settle_s 이상 유지한 자세가 "기준 자세"
+    fall_settle_s: float = 5.0
+    fall_onset_max_gap_s: float = 15.0      # 기준 자세 → 누움까지 이 시간 안이어야 "눕는 과정을 봄"
+    # 기준 자세 대비 엉덩이 하강 / 기준 몸통 길이 ≥ 이 값 → 느린 낙상 (소파에 눕기는 엉덩이 높이가 거의 그대로)
+    slow_fall_hip_drop_ratio: float = 0.5
+    slow_fall_confirm_s: float = 5.0        # 느린 낙상: 누운 자세가 이만큼 이어지면 알람
+    fall_conf_slow: float = 0.9
+    # 눕는 과정을 못 봤는데 누운 자세가 이만큼 이어지면 알람 (낮은 confidence). None=끔
+    fall_lying_only_s: float | None = 60.0
+    # 마지막 상태 기억: 사람을 놓쳐도 이 시간 동안 마지막 상태(쉬며 누움/서 있음 등)를 기억
+    vision_context_memory_s: float = 1800.0
+    # 마지막에 서 있던 사람이 (과정을 못 봤는데) 누워 있으면 → 이 시간 후 알람 (넘어졌을 가능성 높음)
+    fall_unseen_after_standing_s: float = 10.0
+    fall_conf_unseen_standing: float = 0.8
+    # 이불 단서: 눕는 과정을 못 봤고 상체만 보이며 무릎·발목이 계속 안 보이면 (이불 덮음) 대기를 이만큼으로. None=안 씀
+    fall_lying_only_covered_s: float | None = 300.0
+    fall_covered_min_ratio: float = 0.8     # 누운 프레임 중 하체가 안 보인 비율이 이 이상이면 "덮음"
+    # 취침 선언("잘게" 음성·대시보드): 선언 후 이 시간 안에 눕지 않으면 선언 취소
+    sleep_declared_timeout_s: float = 1800.0
+    fall_conf_descent: float = 1.0          # confidence = 이 가중치 × 핵심 관절 평균 신뢰도
+    fall_conf_lying_only: float = 0.6
+    fall_rearm_upright_s: float = 5.0       # 알람 후 이만큼 일어서/앉아 있어야 다음 낙상 알람 가능
+    # F7 무움직임
+    # 자세별: 이 시간 동안 움직임이 없으면 알람. None=그 자세에서는 알람 안 함
+    no_motion_minutes: float = 10.0                 # 그 외 (누움 등, 쉬는 중이 아닌 경우)
+    no_motion_minutes_standing: float = 5.0         # 서서 굳어 있음은 짧게
+    no_motion_minutes_sitting: float = 30.0         # TV·독서 고려
+    no_motion_minutes_resting: float | None = None  # 스스로 누워 쉬는 중(잠) → 끔
+    no_motion_pause_multi: bool = True              # 2명 이상 보이면 F7 멈춤 (다른 사람이 같이 있음)
+    no_motion_threshold: float = 0.05       # 기준 자세 대비 관절 평균 이동 (bbox 높이 비율) > 이 값 → 움직임
+    no_motion_absent_reset_s: float = 10.0  # 사람 없음/판정 불가가 이보다 길면 누적 초기화
+    no_motion_min_common_kpts: int = 4      # 이동량 계산에 필요한 공통 관절 수
+    # ESP32 status.mode 중 로봇이 움직이는 모드 → F7 누적 멈춤·초기화 (docs/serial-protocol.md)
+    robot_moving_modes: tuple[str, ...] = ("walking",)
+
     # 주기 (docs/api.md)
     status_interval_s: float = 2.0
     pose_interval_s: float = 0.4
@@ -105,6 +192,10 @@ def load_settings(env_file: Path | None = None) -> Settings:
         log_dir=Path(env.get("PD_DOG_LOG_DIR") or data_dir / "logs"),
         model_dir=model_dir,
         pose_hef=pose_hef,
+        marker_size_cm=_opt_float(env.get("MARKER_SIZE_CM")),
+        sleep_marker_ids=_int_tuple(env.get("SLEEP_MARKER_IDS")),
+        sleep_hours=_hours(env.get("SLEEP_HOURS")),
+        camera_focal_px=_opt_float(env.get("CAMERA_FOCAL_PX")),
         camera_hflip=_bool(env.get("CAMERA_HFLIP"), default=False),
         camera_vflip=_bool(env.get("CAMERA_VFLIP"), default=False),
         x1200_pld_power_ok_level=_opt_int(env.get("X1200_PLD_POWER_OK_LEVEL")),

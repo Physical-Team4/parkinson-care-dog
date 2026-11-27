@@ -106,6 +106,8 @@ d = VDevice(); print('hailo ok'); d.release()
 "
 ```
 - conda나 apt 업데이트로 numpy major가 달라지면(예: conda numpy 3.x) 위 명령을 다시 돌려 확인한다.
+- 2026-11-27 `opencv` 추가 후 `conda env update -f environment.yml --prune` (반드시 `conda activate pd-dog` 상태에서 확인):
+  `check_pi_env.sh` 모두 ✅, numpy conda 2.5.5 그대로, OpenCV **5.1.0** (`cv2.aruco` 있음), `pytest pi/tests` 71 passed. PC도 같은 버전.
 
 ### 2-3-1. AI HAT+ 13T = Hailo-8L
 - AI HAT+ 13 TOPS의 칩은 **Hailo-8L**이다 (`lspci`에는 "Hailo-8"로 나올 수 있음 → `hailortcli fw-control identify`의
@@ -133,6 +135,8 @@ MZ_VERSION=v2.xx.0 bash pi/scripts/download_models.sh      # ✅ 나온 가장 �
   - `bench_pose` 첫 실행: 출력 9개 = stride 8·16·32 × (64·1·51), **cls는 칩에서 sigmoid 적용됨, kpt conf는 아님**
     (`pose 출력 sigmoid 적용: cls=False kpt_conf=True`). 640×480 카메라는 초당 30프레임에서 막힘 (캡처 대기 ~18ms).
 
+**가구 검출 확인용 모델** (선택): `MZ_VERSION=v2.20.0 bash pi/scripts/download_models.sh yolov8s` → `python -m pi.scripts.furniture_check --help`
+
 **벤치마크** (레포 루트, `pd-dog` 환경) → 출력 마지막 줄을 [benchmarks.md](benchmarks.md) 표에 붙인다:
 ```bash
 hailortcli run ~/pd-dog-models/hailo8l/yolov8s_pose.hef                          # (참고) 칩 단독 FPS
@@ -153,6 +157,9 @@ ssh -L 8765:127.0.0.1:8765 <user>@<pi 주소>
 ```
 - 화면 옆에 FPS, 단계별 ms, 사람별 검출 점수·키포인트 평균 신뢰도·몸통 각도·bbox 비율이 나온다 (표시용).
 - 끝낼 때 Pi에서 Ctrl+C. 화면 저장·녹화 기능은 없다.
+- `--markers`: 로봇 이동 마커(ArUco)를 보라색 테두리·번호로 표시하고 패널에 한 변(px)·가로 위치·인식 시간(ms)을 보여준다.
+  `.env`에 `MARKER_SIZE_CM`·`CAMERA_FOCAL_PX`가 있으면 거리·방향도 나온다 ([navigation.md](navigation.md) §11).
+  `SLEEP_MARKER_IDS`·`SLEEP_HOURS`가 있으면 같은 마커로 잠자리 판단도 하고, 사람 이름표에 "잠자리"가 붙는다.
 
 ### 2-4. ESP32 시리얼 포트 고정 (TODO)
 `/dev/ttyUSB0` 번호가 바뀔 수 있으니 udev 규칙으로 `/dev/pd-dog-esp32` 고정 예정.
@@ -214,6 +221,53 @@ sudo -n /usr/sbin/shutdown --help >/dev/null && echo OK
 
 - 대기열(SQLite)은 알람이 생길 때마다 바로 디스크에 저장되므로 종료 후 다음 부팅에 재전송된다.
 - 대시보드 battery_low 알람은 DB 트리거가 `robot_status`에서 만든다 (Pi가 따로 안 보냄).
+
+### 2-7. USB 핀마이크 입력 볼륨 (2026-11-27, A 측정 → B 확인)
+**증상(팀원 보고)**: 녹음 소리가 아주 작고, 바로 앞에서 손가락을 튕겨도 찢어지는 소리가 안 남. 녹음 후 5배 증폭하면 잡음도 같이 커짐.
+**원인**: ALSA **입력 볼륨(Mic Capture Volume)이 낮았음**. 녹음한 뒤에 숫자로 키우면 잡음까지 같이 커지므로, 녹음 단계(하드웨어)에서 올려야 한다.
+
+마이크: 일체형 USB 핀마이크(라발리에). `lsusb`에 `AB13X Headset Adapter`, `arecord -l`에 `card 2: AB13X USB Audio`로 보인다 (카드 번호는 바뀔 수 있음).
+
+**설정** (Pi, 마이크를 꽂은 상태)
+```bash
+arecord -l                          # card 번호 확인
+alsamixer -c 2                      # F4(Capture) → Mic를 80%로, 아래 빨간 CAPTURE가 켜져 있는지(Space) → Esc
+amixer -c 2 contents                # 확인: Mic Capture Switch=on, Mic Capture Volume≈7433/8191 (0~32dB 중 약 29dB)
+sudo alsactl store                  # 재부팅 후에도 유지
+```
+- **80~90% 권장.** 80%에서 바로 앞 손가락 튕김이 이미 최대치(0 dBFS)에 닿으므로, 100%는 가까이서 크게 말할 때 소리가 찢어질 수 있다.
+- `alsamixer`의 F3(Playback) 화면 `Mic`는 마이크 소리를 스피커로 들려주는 볼륨이라 녹음과 무관하다.
+
+**측정 결과 (볼륨 80%, `pd-dog` 환경, 저장 없이 0.25초마다 dBFS)**
+
+| 상황 | RMS (dBFS) | 최고 (dBFS) |
+|---|---|---|
+| 조용할 때 (잡음) | -60 ~ -65 | -48 ~ -55 |
+| 30cm에서 "아~" | -37 ~ -45 | -28 ~ -35 |
+| 바로 앞 손가락 튕김 | -15 ~ -37 | **-5 ~ 0** |
+
+- 30cm에서 목소리와 잡음 차이 약 20dB → 양호.
+- **1~2m(로봇과 사람 사이 거리)는 부족할 수 있다**: 거리가 2배마다 약 6dB 작아져 1m 약 -50, 2m 약 -56 dBFS로 예상 → 잡음과 차이 5~15dB.
+  실측·Vosk 인식률 확인 필요 ([todo.md](todo.md)). 핀마이크는 입 가까이(15~20cm) 다는 용도라 원거리에 약하다.
+- 볼륨을 올려도 잡음이 같이 올라가 목소리·잡음 차이는 거의 그대로다. 차이를 벌리려면 잡음원(Pi 쿨러 팬, MechDog 서보)에서
+  마이크를 떨어뜨리거나 원거리용 마이크를 쓴다.
+- **F4 dB 보정**: 입력 볼륨을 바꾸면 측정 dB도 바뀐다 → 볼륨을 고정한 **뒤에** 소음계로 `calibration_offset_db`를 정한다.
+
+측정 스크립트 (음성 원본 저장 없음, 메모리에서 계산 후 버림):
+```bash
+conda activate pd-dog
+python - <<'EOF'
+import sounddevice as sd, numpy as np, time
+dev = next(i for i, d in enumerate(sd.query_devices()) if "AB13X" in d["name"] and d["max_input_channels"] > 0)
+sr = int(sd.query_devices(dev)["default_samplerate"])
+db = lambda v: 20 * np.log10(max(float(v), 1e-10))
+def cb(indata, frames, t, status):
+    x = indata[:, 0]
+    print(f"RMS {db(np.sqrt(np.mean(x * x))):6.1f}  최고 {db(np.max(np.abs(x))):6.1f}")
+with sd.InputStream(device=dev, channels=1, samplerate=sr, blocksize=sr // 4, callback=cb):
+    time.sleep(20)
+EOF
+```
 
 ## 3. Supabase (D가 1회)
 1. Supabase에서 프로젝트 생성 (리전: 서울 `ap-northeast-2` 권장).

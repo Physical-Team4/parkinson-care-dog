@@ -74,6 +74,45 @@ class PoseEstimator(Protocol):
     def close(self) -> None: ...
 
 
+@dataclass(frozen=True)
+class MarkerObs:
+    """마커 1개 관측 (로봇 이동, docs/navigation.md). 좌표는 원본 프레임 기준 0~1."""
+    marker_id: int
+    corners: np.ndarray     # (4, 2) float32, 0~1 (x는 가로 비율, y는 세로 비율)
+    cx: float               # 중심 x, 0~1 (0.5 = 화면 가운데)
+    side_px: float          # 화면상 한 변 길이 (px) → 거리 추정용
+    frame_w: int            # 원본 프레임 크기 (px)
+    frame_h: int
+
+
+class MarkerDetector(Protocol):
+    """카메라 프레임 → ArUco 마커 (adapters/markers.py, mock)."""
+    last_ms: float          # 마지막 detect() 처리 시간
+
+    def detect(self, frame: np.ndarray) -> list[MarkerObs]:
+        """RGB (H, W, 3) uint8. frame은 보관하지 않는다."""
+        ...
+
+
+@dataclass(frozen=True)
+class Detection:
+    """일반 물체 검출 1개 (COCO). bbox는 원본 프레임 기준 0~1 (x1, y1, x2, y2)."""
+    class_id: int
+    name: str
+    score: float
+    bbox: tuple[float, float, float, float]
+
+
+class ObjectDetector(Protocol):
+    """카메라 프레임 → COCO 물체 (adapters/hailo_detect.py, mock). 가구(침대·소파) 확인용."""
+
+    def detect(self, frame: np.ndarray) -> list[Detection]:
+        """RGB (H, W, 3) uint8. frame은 보관하지 않는다."""
+        ...
+
+    def close(self) -> None: ...
+
+
 class Microphone(Protocol):
     sample_rate: int
 

@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>PD-Dog Pose Viewer</title>
 <style>
-  :root { --bg:#111418; --panel:#1b2027; --fg:#e6e9ee; --muted:#8b95a3; --ok:#3ccf7a; --mid:#f2c14e; --low:#e5534b; --box:#4aa8ff; }
+  :root { --bg:#111418; --panel:#1b2027; --fg:#e6e9ee; --muted:#8b95a3; --ok:#3ccf7a; --mid:#f2c14e; --low:#e5534b; --box:#4aa8ff; --marker:#c77dff; }
   * { box-sizing:border-box; }
   body { margin:0; background:var(--bg); color:var(--fg); font:14px/1.45 system-ui, sans-serif; }
   main { display:flex; gap:16px; padding:16px; flex-wrap:wrap; }
@@ -21,6 +21,8 @@
   .person { border-top:1px solid #2c333d; margin-top:8px; padding-top:8px; }
   label { display:block; margin-top:12px; }
   input[type=range] { width:100%; }
+  button { background:#2c333d; color:var(--fg); border:1px solid #3a4250; border-radius:6px; padding:6px 10px; font:inherit; cursor:pointer; }
+  button:hover { background:#36404c; }
   .legend span { display:inline-block; width:10px; height:10px; border-radius:50%; margin:0 4px 0 10px; vertical-align:middle; }
 </style>
 </head>
@@ -36,7 +38,12 @@
       <tr><td class="muted">프레임 처리 ms</td><td id="ms">–</td></tr>
       <tr><td class="muted">전처리 / 추론 / 후처리</td><td id="timing">–</td></tr>
       <tr><td class="muted">사람 수</td><td id="n">–</td></tr>
+      <tr><td class="muted">판정 상태 (F6)</td><td id="state" style="font-weight:700">–</td></tr>
+      <tr><td class="muted">안 움직인 시간 (F7)</td><td id="still">–</td></tr>
     </table>
+    <p><button id="sleepOn">취침 선언 ("잘게" 시험)</button> <button id="sleepOff">해제</button></p>
+    <div id="markers"></div>
+    <div id="alarms"></div>
     <div id="people"></div>
     <label>표시할 키포인트 최소 신뢰도 <b id="thv">0.30</b>
       <input id="th" type="range" min="0" max="1" step="0.05" value="0.3"></label>
@@ -51,6 +58,8 @@ const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).
 const th = document.getElementById('th');
 th.oninput = () => document.getElementById('thv').textContent = (+th.value).toFixed(2);
 const img = new Image();
+document.getElementById('sleepOn').onclick = () => fetch('/sleep?on=1');
+document.getElementById('sleepOff').onclick = () => fetch('/sleep?on=0');
 
 function torsoAngle(k, t) {
   const ok = i => k[i][2] >= t;
@@ -96,6 +105,56 @@ function draw(d, video) {
   const tm = d.timing || {};
   document.getElementById('timing').textContent = 'infer_ms' in tm ? `${tm.pre_ms} / ${tm.infer_ms} / ${tm.post_ms}` : '–';
   document.getElementById('n').textContent = d.people.length;
+  drawPersons(d.judge, W, H);
+  drawMarkers(d.markers, W, H);
+  const j = d.judge;
+  if (j) {
+    const st = document.getElementById('state');
+    const LABEL = {none: '사람 없음/판정 불가', standing: '서 있음', sitting: '앉음', falling: '쓰러짐 의심', lying: '누움'};
+    const SLEEP = {declared: ' · 취침 선언함', asleep: ' · 잠듦'};
+    st.textContent = `${LABEL[j.state] || j.state} (${j.state})` + (j.resting ? ' · 쉬는 중' : '') + (SLEEP[j.sleep] || '');
+    st.style.color = j.state === 'falling' ? css('--mid') : j.state === 'lying' ? css('--low') : '';
+    document.getElementById('still').textContent = `${j.still_s}초`;
+    document.getElementById('alarms').innerHTML = j.alarms.length
+      ? '<div class="person"><b>알람 (전송 안 함, 최근 5개)</b>' + j.alarms.slice().reverse().map(a =>
+          `<div style="color:var(--low)">${a.at} ${a.source === 'camera' ? '낙상' : '무움직임'}` +
+          `${a.confidence != null ? ' conf ' + a.confidence.toFixed(2) : ''}` +
+          `<div class="muted">${Object.entries(a.detail || {}).map(([k, v]) => k + '=' + v).join(' ')}</div></div>`).join('') + '</div>'
+      : '';
+  }
+}
+
+function drawPersons(j, W, H) {
+  // 사람별 추적 번호·판정 상태 (bbox 아래쪽). ★ = 주목할 사람 (대시보드·F7 기준)
+  if (!j || !j.persons) return;
+  const LABEL = {none: '판정 불가', standing: '서 있음', sitting: '앉음', falling: '쓰러짐 의심', lying: '누움'};
+  ctx.font = 'bold 14px system-ui';
+  for (const p of j.persons) {
+    const [x1, , , y2] = p.bbox;
+    const txt = `${p.focus ? '★' : ''}P${p.id} ${LABEL[p.state] || p.state}${p.resting ? '·쉼' : ''}${p.spot ? '·잠자리' : ''}`;
+    ctx.fillStyle = p.state === 'falling' ? css('--mid') : p.state === 'lying' && !p.resting ? css('--low') : css('--box');
+    ctx.fillText(txt, x1*W + 4, Math.min(H - 4, y2*H + 16));
+  }
+}
+
+function drawMarkers(mk, W, H) {
+  const box = document.getElementById('markers');
+  if (!mk) { box.innerHTML = ''; return; }
+  ctx.strokeStyle = css('--marker'); ctx.fillStyle = css('--marker'); ctx.lineWidth = 3; ctx.font = 'bold 15px system-ui';
+  for (const m of mk.list) {
+    ctx.beginPath();
+    m.corners.forEach(([x, y], i) => i ? ctx.lineTo(x*W, y*H) : ctx.moveTo(x*W, y*H));
+    ctx.closePath(); ctx.stroke();
+    const [x0, y0] = m.corners[0];
+    ctx.fillText(`M${m.id}`, x0*W, Math.max(15, y0*H - 6));
+  }
+  const rows = mk.list.map(m => `<tr><td>M${m.id}</td><td>${m.side_px}px</td><td>${m.cx.toFixed(2)}</td>` +
+    `<td>${m.dist_cm == null ? '–' : m.dist_cm + 'cm'}</td><td>${m.bearing_deg == null ? '–' : m.bearing_deg + '°'}</td></tr>`).join('');
+  box.innerHTML = `<div class="person"><b>마커 (로봇 이동)</b> <span class="muted">인식 ${mk.ms} ms</span>` +
+    (mk.list.length
+      ? `<table><tr class="muted"><td>번호</td><td>한 변</td><td>가로</td><td>거리</td><td>방향</td></tr>${rows}</table>`
+      : '<div class="muted">마커 없음</div>') +
+    '<div class="muted">가로 0.5 = 화면 가운데. 거리·방향은 MARKER_SIZE_CM·CAMERA_FOCAL_PX 설정 후 표시 (방향 +는 오른쪽)</div></div>';
 }
 
 async function loop() {
