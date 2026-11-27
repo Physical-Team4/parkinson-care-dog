@@ -2,7 +2,8 @@
 #   TOUCH_SOS_HOLD_MS 이상 누름 → touch_sos (손 떼기 전에 1번만). Pi 무응답이면 MP3 경보 (D-001)
 #   짧게 터치 → 복약 대기 중이면 medication.confirm(due, "touch")
 #   TOUCH_MIN_TAP_MS 미만 → 스침·신호 튐으로 보고 무시
-# 눈 색: 누르는 중 주황, SOS 빨강, 짧은 터치 인식 초록(TOUCH_TAP_FEEDBACK_MS 동안)
+# 눈 색: 누르는 중 주황, SOS 빨강, 짧은 터치 인식 초록(TOUCH_TAP_FEEDBACK_MS 동안).
+#   터치가 눈을 쓰는 동안 medication.hold_eyes=True → 복약 대기 파랑 깜빡임이 덮어쓰지 않음
 # 블로킹 없음: 초록 불은 끌 시각을 기억했다가 다음 tick에서 끈다.
 import utime
 
@@ -37,6 +38,7 @@ class Touch:
             self._pressed_at = now
             self._sos_sent = False
             self._eyes_off_at = None
+            self._medication.hold_eyes = True     # 복약 깜빡임보다 터치 표시가 먼저
             self._eyes.color(*ORANGE)
         elif (pressing and not self._sos_sent
               and utime.ticks_diff(now, self._pressed_at) >= config.TOUCH_SOS_HOLD_MS):
@@ -51,10 +53,10 @@ class Touch:
             held = utime.ticks_diff(now, self._pressed_at)
             self._pressed_at = None
             if self._sos_sent:
-                self._eyes.off()
+                self._eyes_release()
             elif held < config.TOUCH_MIN_TAP_MS:
                 log("touch ignored " + str(held) + "ms")
-                self._eyes.off()
+                self._eyes_release()
             else:
                 due = self._medication.pending_due
                 if due is not None:
@@ -63,5 +65,9 @@ class Touch:
                 self._eyes_off_at = utime.ticks_add(now, config.TOUCH_TAP_FEEDBACK_MS)
 
         if self._eyes_off_at is not None and utime.ticks_diff(now, self._eyes_off_at) >= 0:
-            self._eyes.off()
+            self._eyes_release()
             self._eyes_off_at = None
+
+    def _eyes_release(self):
+        self._eyes.off()
+        self._medication.hold_eyes = False    # 복약 대기 중이면 깜빡임 다시 시작

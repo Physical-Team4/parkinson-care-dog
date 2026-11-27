@@ -33,6 +33,8 @@ MP3_TRACK_PI_LOW = None     # TODO(D): "로봇 배터리를 충전해 주세요"
 # ── F1 복약 (Pi가 settings로 덮어씀) ──
 MED_TIMES_DEFAULT = ["08:00", "12:30", "18:00", "22:00"]
 MED_CONFIRM_TIMEOUT_MS = 30 * 60 * 1000
+MED_EYES_COLOR = (0x00, 0x40, 0xFF)   # 복약 대기 중 눈 깜빡임 색 (파랑. 터치 주황·SOS 빨강·확인 초록과 구분)
+MED_BLINK_MS = 500                    # 켜짐/꺼짐 간격
 
 # ── F3 박자 보행 ──
 BPM_MIN = 80

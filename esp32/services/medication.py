@@ -1,5 +1,5 @@
 # F1 복약 알림 (담당: D). 형식·규칙: docs/serial-protocol.md "F1 복약".
-#   시각 도래 → med_due + MP3 → 짧은 터치(med_ok) 또는 음성(Pi med_ack)으로 확인
+#   시각 도래 → med_due + MP3 + 확인할 때까지 눈 파랑 깜빡임 → 짧은 터치(med_ok) 또는 음성(Pi med_ack)으로 확인
 #   30분 미확인(또는 다음 복약 시각이 먼저 옴) → med_missed, Pi 무응답이면 MP3 경보 (D-001)
 # ESP32에는 시계가 없다 → Pi가 settings의 now("HH:MM:SS")로 알려 준 시각 + 그 뒤 흐른 ticks로 계산.
 # now를 못 받았으면 알림을 하지 않는다 (시각을 추측하지 않음).
@@ -27,8 +27,12 @@ def parse_hhmm(text, with_seconds=False):
 
 
 class Medication:
-    def __init__(self, mp3):
+    def __init__(self, mp3, eyes):
         self._mp3 = mp3
+        self._eyes = eyes
+        self.hold_eyes = False      # 터치가 눈을 쓰는 중이면 True (Touch가 세움) → 깜빡임 멈춤
+        self._blink_on = False
+        self._blink_at = None
         self.times = []
         self.set_times(config.MED_TIMES_DEFAULT)
         self.pending_due = None     # 확인 기다리는 복약 시각 "HH:MM" (터치가 본다)
@@ -74,11 +78,31 @@ class Medication:
         if method == "touch":
             send({"t": "med_ok", "due": self.pending_due, "method": "touch"})
         log("med ok " + self.pending_due + " " + method)
-        self.pending_due = None
-        self._pending_since = None
+        self._clear()
         return True
 
+    def _clear(self):
+        self.pending_due = None
+        self._pending_since = None
+        self._blink_at = None
+        if self._blink_on and not self.hold_eyes:
+            self._eyes.off()
+        self._blink_on = False
+
+    def _blink(self, now):
+        """대기 중 눈 깜빡임. 터치가 눈을 쓰는 동안(hold_eyes)은 건드리지 않는다."""
+        if self.pending_due is None or self.hold_eyes:
+            return
+        if self._blink_at is None or utime.ticks_diff(now, self._blink_at) >= config.MED_BLINK_MS:
+            self._blink_at = now
+            self._blink_on = not self._blink_on
+            if self._blink_on:
+                self._eyes.color(*config.MED_EYES_COLOR)
+            else:
+                self._eyes.off()
+
     def tick(self, now, serial, hb):
+        self._blink(now)
         if self._clock_ref is None:
             if not self._warned and self.times:
                 log("warn: no clock from Pi (settings.now) -> medication off")
@@ -110,5 +134,4 @@ class Medication:
         if not hb.pi_alive():
             self._mp3.play(config.MP3_TRACK_ALARM)
             log("med_missed: pi down -> mp3 alarm")
-        self.pending_due = None
-        self._pending_since = None
+        self._clear()

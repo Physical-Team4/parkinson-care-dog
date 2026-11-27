@@ -92,9 +92,12 @@ class SerialCommands:
             send(reply)
 
     def send_status(self, rhythm, laser):
+        mode = rhythm.mode
+        if mode == "idle" and self.medication.pending_due is not None:
+            mode = "medication"           # 복약 확인 기다리는 중 (보행 중이면 보행이 먼저)
         send({
             "t": "status",
-            "mode": rhythm.mode,
+            "mode": mode,
             "dog_battery_pct": None,      # TODO(D): MechDog 배터리 전압 읽기
             "follow_distance_cm": rhythm.follow_distance_cm,
             "laser_on": laser.is_on(),

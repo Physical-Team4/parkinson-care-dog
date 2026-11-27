@@ -30,6 +30,17 @@ class FakeMp3:
         return track is not None
 
 
+class FakeEyes:
+    def __init__(self):
+        self.calls = []
+
+    def color(self, r, g, b):
+        self.calls.append((r, g, b))
+
+    def off(self):
+        self.calls.append("off")
+
+
 class FakeHb:
     def __init__(self, alive=True):
         self.alive = alive
@@ -45,10 +56,10 @@ def env(monkeypatch):
     monkeypatch.setattr(med_mod, "log", logs.append)
     monkeypatch.setattr(config, "MP3_TRACK_MEDICATION", 7)
     monkeypatch.setattr(config, "MP3_TRACK_ALARM", 9)
-    mp3 = FakeMp3()
-    m = med_mod.Medication(mp3)
+    mp3, eyes = FakeMp3(), FakeEyes()
+    m = med_mod.Medication(mp3, eyes)
     m.set_times(["08:00"])
-    return types.SimpleNamespace(m=m, sent=sent, logs=logs, mp3=mp3, hb=FakeHb())
+    return types.SimpleNamespace(m=m, sent=sent, logs=logs, mp3=mp3, eyes=eyes, hb=FakeHb())
 
 
 def kinds(sent):
@@ -160,3 +171,35 @@ def test_set_times_validation(env):
     env.m.set_clock("08:00:00", 0)
     env.m.tick(0, None, env.hb)
     assert env.sent == []
+
+
+def test_eyes_blink_while_pending_and_yield_to_touch(env):
+    blue = config.MED_EYES_COLOR
+    step = config.MED_BLINK_MS
+    env.m.tick(0, None, env.hb)
+    assert env.eyes.calls == []                         # 대기 없으면 눈 그대로
+    env.m.set_clock("08:00:00", 0)
+    env.m.tick(0, None, env.hb)                         # med_due
+    env.m.tick(1, None, env.hb)
+    assert env.eyes.calls == [blue]
+    env.m.tick(1 + step, None, env.hb)
+    env.m.tick(1 + 2 * step, None, env.hb)
+    assert env.eyes.calls == [blue, "off", blue]
+    env.m.hold_eyes = True                              # 터치 중: 깜빡임이 덮어쓰지 않음
+    env.m.tick(1 + 3 * step, None, env.hb)
+    assert len(env.eyes.calls) == 3
+    env.m.confirm("08:00", "touch")                     # 터치가 눈을 쓰는 중이면 끄지도 않음 (초록 표시 유지)
+    assert len(env.eyes.calls) == 3
+    env.m.hold_eyes = False
+    env.m.tick(1 + 4 * step, None, env.hb)
+    assert len(env.eyes.calls) == 3                     # 확인 후 더 깜빡이지 않음
+
+
+def test_eyes_off_when_missed(env):
+    env.m.set_clock("08:00:00", 0)
+    env.m.tick(0, None, env.hb)
+    env.m.tick(1, None, env.hb)
+    assert env.eyes.calls[-1] == config.MED_EYES_COLOR
+    env.m.tick(TIMEOUT, None, env.hb)
+    assert env.eyes.calls[-1] == "off"
+    assert env.m.pending_due is None
