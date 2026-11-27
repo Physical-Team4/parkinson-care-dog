@@ -39,6 +39,8 @@ MED_BLINK_MS = 500                    # 켜짐/꺼짐 간격
 MED_BEEP_TONES = [(1500, 120), (1800, 120)]   # (Hz, ms). 2026-11-27 실기기에서 음량 100으로 시험
 MED_BEEP_VOLUME = 100         # 부저 음량 (펌웨어 기본 500). 작게
 MED_BEEP_GAP_MS = 80
+MED_BEEP_COUNT = 5            # 한 번 알릴 때 "삐빅"을 몇 번 (2026-11-27 D 요청: 5번)
+MED_BEEP_PAUSE_MS = 300       # "삐빅"과 "삐빅" 사이 쉼
 MED_BEEP_REPEAT_MS = 60 * 1000   # 확인할 때까지 이 간격으로 다시 울림. None이면 처음 1번만
 
 # ── F3 박자 보행 ──

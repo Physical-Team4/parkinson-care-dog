@@ -106,7 +106,10 @@ class Medication:
 
     def _beep(self, now):
         if config.MED_BEEP_TONES:
-            self._buzzer.beep(config.MED_BEEP_TONES, config.MED_BEEP_VOLUME, config.MED_BEEP_GAP_MS, now)
+            # "삐빅" × MED_BEEP_COUNT, 사이에 쉼((0, ms) = 소리 없이 기다림)
+            one = list(config.MED_BEEP_TONES) + [(0, config.MED_BEEP_PAUSE_MS)]
+            tones = (one * max(1, config.MED_BEEP_COUNT))[:-1]
+            self._buzzer.beep(tones, config.MED_BEEP_VOLUME, config.MED_BEEP_GAP_MS, now)
         self._beep_at = now
 
     def tick(self, now, serial, hb):

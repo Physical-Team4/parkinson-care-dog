@@ -48,6 +48,7 @@ class FakeBuzzer:
 
     def beep(self, tones, volume, gap_ms, now):
         self.beeps.append((now, volume))
+        self.tones = tones
         return True
 
 
@@ -252,3 +253,33 @@ def test_buzzer_driver_plays_tones_without_blocking(monkeypatch):
     assert calls[-1] == (1800, 120, False)
     b.tick(5000)
     assert len(calls) == 4                              # 끝
+
+
+def test_beep_is_five_bibik_with_pauses(env):
+    env.m.set_clock("08:00:00", 0)
+    env.m.tick(0, None, env.hb)
+    tones = env.buzzer.tones
+    sounds = [t for t in tones if t[0]]
+    rests = [t for t in tones if not t[0]]
+    assert len(sounds) == len(config.MED_BEEP_TONES) * config.MED_BEEP_COUNT == 10
+    assert rests == [(0, config.MED_BEEP_PAUSE_MS)] * (config.MED_BEEP_COUNT - 1)
+    assert tones[-1][0] != 0                            # 쉼표로 끝나지 않음
+
+
+def test_buzzer_rest_makes_no_sound(monkeypatch):
+    calls = []
+
+    class FakeBz:
+        def setVolume(self, v):
+            pass
+
+        def playTone(self, f, ms, wait):
+            calls.append((f, ms))
+
+    monkeypatch.setitem(sys.modules, "Hiwonder", types.SimpleNamespace(bz=FakeBz()))
+    from drivers.buzzer import Buzzer
+    b = Buzzer()
+    b.beep([(1500, 100), (0, 300), (1500, 100)], 100, 0, 0)
+    for t in (0, 100, 400):
+        b.tick(t)
+    assert calls == [(1500, 100), (1500, 100)]          # 쉼표는 소리 없이 300ms만 기다림

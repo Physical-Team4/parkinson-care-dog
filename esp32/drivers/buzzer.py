@@ -18,7 +18,7 @@ class Buzzer:
         self._next_at = None
 
     def beep(self, tones, volume, gap_ms, now):
-        """tones = [(Hz, ms), ...]를 gap_ms 간격으로. 이미 울리는 중이면 새 것으로 바꾼다."""
+        """tones = [(Hz, ms), ...]를 gap_ms 간격으로. Hz가 0이면 쉼표. 이미 울리는 중이면 새 것으로 바꾼다."""
         if self._bz is None or not tones:
             return False
         self._queue = list(tones)
@@ -31,10 +31,11 @@ class Buzzer:
         if not self._queue or utime.ticks_diff(now, self._next_at) < 0:
             return
         freq, ms = self._queue.pop(0)
-        try:
-            self._bz.setVolume(self._volume)
-            self._bz.playTone(freq, ms, False)
-        except Exception:
-            self._queue = []
-            return
+        if freq:                                   # (0, ms) = 쉼표: 소리 없이 기다리기만
+            try:
+                self._bz.setVolume(self._volume)
+                self._bz.playTone(freq, ms, False)
+            except Exception:
+                self._queue = []
+                return
         self._next_at = utime.ticks_add(now, ms + self._gap_ms)
