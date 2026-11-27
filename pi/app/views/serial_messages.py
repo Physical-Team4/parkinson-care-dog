@@ -86,3 +86,15 @@ def shutdown(reason: str, msg_id: int) -> bytes:
     if reason not in SHUTDOWN_REASONS:
         raise ValueError(f"reason must be one of {SHUTDOWN_REASONS}")
     return encode(SHUTDOWN, msg_id, reason=reason)
+
+
+def settings(now: str | None = None, med_times: list[str] | None = None, bpm: int | None = None,
+             follow_limit_cm: int | None = None) -> bytes:
+    """대시보드 설정 + 시계 → ESP32. 모든 필드 선택, None은 빼고 보낸다 (now만 보내면 시계 맞추기)."""
+    fields = {"now": now, "med_times": med_times, "bpm": bpm, "follow_limit_cm": follow_limit_cm}
+    return encode(SETTINGS, **{k: v for k, v in fields.items() if v is not None})
+
+
+def med_ack(due: str, msg_id: int) -> bytes:
+    """복약 확인됨 (음성, 또는 이미 확인된 복약을 로봇이 다시 알릴 때) → ESP32는 조용히 대기만 끝낸다."""
+    return encode(MED_ACK, msg_id, due=due)

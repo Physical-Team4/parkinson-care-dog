@@ -168,6 +168,13 @@ class Settings:
     # ESP32 status가 이 시간 넘게 없으면 esp32_ok=false (docs/serial-protocol.md)
     esp32_status_timeout_s: float = 3.0
     heartbeat_interval_s: float = 1.0
+    # 대시보드 설정 → ESP32 settings (services/settings_sync.py). 시계는 ESP32에 없어서 주기적으로 맞춤
+    settings_poll_interval_s: float = 20.0
+    esp32_clock_sync_interval_s: float = 600.0
+    # F1: ESP32 MED_CONFIRM_TIMEOUT_MS(30분)와 같게. 로봇이 잊은 pending을 이만큼 + 여유 뒤 missed로
+    medication_confirm_timeout_s: float = 1800.0
+    medication_missed_grace_s: float = 120.0
+    medication_check_interval_s: float = 30.0
     # 대기열 재전송
     queue_flush_interval_s: float = 5.0
     queue_max_backoff_s: float = 300.0

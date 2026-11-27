@@ -47,7 +47,7 @@ Supabase 안: 트리거(서버 자동 규칙), pg_cron(연결 끊김 10초 검�
 | `robot_status` | 상태 이력 24시간 | Pi (2초) | 대시보드 (`robot_latest` 뷰) |
 | `settings` | 목표값 단일 행 | 대시보드 | Pi |
 | `medication_schedule` | 복약 시간 1~8개 | 대시보드 | Pi → ESP32 |
-| `medication_logs` | F1 (`due_at` 기준 upsert) | Pi | 대시보드 |
+| `medication_logs` | F1 (`due_at` 기준. missed는 `mark_medication_missed()`로 pending일 때만) | Pi | 대시보드 |
 | `gait_sessions` | F3 | Pi | 대시보드 |
 | `voice_sessions` | F4 | Pi | 대시보드 |
 | `speaker_events` | F5 인식 결과 | Pi | 대시보드 |

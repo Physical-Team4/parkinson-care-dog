@@ -11,6 +11,7 @@
 | `002_functions.sql` | `report_alert`, `ack_alert`, 서버 자동 규칙, 집계 뷰, `daily_stats` |
 | `003_rls.sql` | RLS 켜기, 권한, 정책 |
 | `004_realtime_cron.sql` | Realtime(알람·포즈 Broadcast 정책), pg_cron (Supabase 전용) |
+| `005_medication_missed_guard.sql` | `mark_medication_missed()`: 복약 missed는 pending일 때만 (confirmed 보호) |
 
 적용 방법 (둘 중 하나):
 - Supabase Dashboard → SQL Editor에 파일 내용을 붙여 넣고 순서대로 Run.
