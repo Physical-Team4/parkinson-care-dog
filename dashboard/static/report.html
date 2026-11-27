@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PD-Dog 주간 리포트</title>
+<link rel="icon" href="data:,">
+<style>
+:root{
+  --bg:#f3f2ee; --panel:#fff; --panel-2:#f8f7f4; --ink:#1b2220; --ink-2:#46514d; --muted:#6b7570;
+  --line:#e3e1db; --brand:#0e7c6b; --brand-soft:#e2f2ee; --ok:#2b8a3e; --ok-soft:#e8f6ec;
+  --crit:#c92a2a; --warn:#a85400; --warn-soft:#fff1e0; --bar:#3a6fd8; color-scheme:light;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#121614; --panel:#1a1f1d; --panel-2:#202624; --ink:#e7ece9; --ink-2:#c2cbc7; --muted:#97a29d;
+    --line:#2d3431; --brand:#4fd1b5; --brand-soft:#15302a; --ok:#69db7c; --ok-soft:#15291b;
+    --crit:#ff6b6b; --warn:#ffa94d; --warn-soft:#33240f; --bar:#7aa5ff; color-scheme:dark;
+  }
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);
+  font-family:system-ui,-apple-system,"Malgun Gothic","Apple SD Gothic Neo",sans-serif;font-size:15px;line-height:1.5}
+.wrap{max-width:960px;margin:0 auto;padding:16px;display:grid;gap:16px}
+h1,h2,h3,p{margin:0}
+h1{font-size:22px} h2{font-size:17px}
+.muted{color:var(--muted);font-size:13.5px}
+a{color:var(--brand)}
+button,input{font:inherit}
+button{cursor:pointer;border-radius:10px;border:1px solid var(--line);background:var(--panel);color:var(--ink);padding:8px 14px}
+:focus-visible{outline:3px solid var(--brand);outline-offset:2px}
+header{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;justify-content:space-between}
+.tools{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:18px;display:grid;gap:12px}
+.head{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.badge{margin-left:auto;font-size:11.5px;font-weight:700;border-radius:999px;padding:2px 8px;white-space:nowrap}
+.badge.live{background:var(--ok-soft);color:var(--ok)}
+.badge.demo{background:var(--warn-soft);color:var(--warn)}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.kpi{background:var(--panel-2);border:1px solid var(--line);border-radius:12px;padding:12px}
+.kpi .label{font-size:12.5px;color:var(--muted);font-weight:600}
+.kpi .value{font-size:24px;font-weight:800;font-variant-numeric:tabular-nums}
+.kpi .value small{font-size:13px;color:var(--muted);font-weight:600;margin-left:2px}
+.tablewrap{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:14px;font-variant-numeric:tabular-nums}
+th,td{text-align:left;padding:8px;border-bottom:1px solid var(--line);white-space:nowrap}
+th{color:var(--muted);font-weight:600;font-size:12.5px}
+td.r,th.r{text-align:right}
+tfoot td{font-weight:800;border-top:2px solid var(--line)}
+.zero{color:var(--muted)}
+.hit{color:var(--crit);font-weight:800}
+.barcell{display:flex;align-items:center;gap:8px;min-width:160px}
+.barcell .bar{flex:1;height:8px;border-radius:99px;background:var(--panel-2);border:1px solid var(--line);overflow:hidden}
+.barcell .fill{height:100%;background:var(--bar);border-radius:0 4px 4px 0}
+.barcell b{width:44px;text-align:right}
+.notes{margin:0;padding:0;list-style:none;display:grid;gap:8px}
+.notes li{border-left:3px solid var(--brand);padding:4px 10px;background:var(--panel-2);border-radius:0 8px 8px 0}
+.badge.info{background:var(--panel-2);color:var(--muted);border:1px solid var(--line)}
+.delay{display:inline-block;margin-left:6px;border-radius:999px;padding:0 6px;font-size:11px;font-weight:700;background:var(--warn-soft);color:var(--warn)}
+.st-confirmed{color:var(--ok);font-weight:700} .st-missed{color:var(--crit);font-weight:700} .st-pending{color:var(--warn);font-weight:700}
+.sim{display:inline-block;margin-left:6px;border-radius:999px;padding:0 6px;font-size:11px;font-weight:700;border:1px dashed var(--brand);color:var(--brand)}
+footer{font-size:12.5px;color:var(--muted);text-align:center;padding:8px 0 24px}
+@media print{
+  :root{--bg:#fff;--panel:#fff;--panel-2:#fff;--ink:#000;--muted:#555;--line:#ccc}
+  .tools,.noprint{display:none!important}
+  .wrap{max-width:none;padding:0}
+  .card{break-inside:avoid;border-color:#ccc}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <div>
+    <div class="muted">PD-Dog 파킨슨병 재활돌봄로봇</div>
+    <h1>주간 재활 리포트</h1>
+    <div class="muted" id="period">불러오는 중…</div>
+  </div>
+  <div class="tools">
+    <label class="muted" id="incSimWrap" hidden><input type="checkbox" id="incSim" checked> 시연 기록 포함</label>
+    <span class="muted" id="modeChip" hidden>🧪 Mock 모드 · 예시 데이터</span>
+    <button onclick="window.print()">🖨️ 인쇄 / PDF 저장</button>
+    <a href="/">← 대시보드로</a>
+  </div>
+</header>
+
+<!-- 1. 안전 알람 (실시간) -->
+<section class="card">
+  <div class="head"><h2>1. 안전 알람</h2><span class="badge live">실시간 기록</span></div>
+  <div class="kpis">
+    <div class="kpi"><div class="label">위급 알람 (낙상·신고·무움직임)</div><div class="value" id="kCrit">-</div></div>
+    <div class="kpi"><div class="label">복약 미확인 알림</div><div class="value" id="kMed">-</div></div>
+    <div class="kpi"><div class="label">확인까지 평균</div><div class="value" id="kResp">-</div></div>
+  </div>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>날짜</th><th class="r">낙상</th><th class="r">무움직임</th><th class="r">위급 신고</th><th class="r">복약 미확인</th><th class="r">확인까지 평균</th></tr></thead>
+      <tbody id="alarmRows"></tbody>
+      <tfoot id="alarmFoot"></tfoot>
+    </table>
+  </div>
+  <div class="muted" id="alarmNote"></div>
+  <h3 style="font-size:15px">보호자 메모</h3>
+  <ul class="notes" id="notes"></ul>
+  <div class="muted" id="noNotes">이번 주에 남긴 메모가 없어요.</div>
+</section>
+
+<!-- 2. 보행 훈련 (예시) -->
+<section class="card">
+  <div class="head"><h2>2. 리듬 큐잉 보행 (F3)</h2><span class="badge info" id="walkBadge">-</span></div>
+  <div class="kpis" id="walkKpis"></div>
+  <div class="tablewrap"><table>
+    <thead><tr><th>날짜</th><th class="r">훈련 횟수</th><th>훈련 시간</th><th class="r">평균 박자</th><th class="r">멈춤 후 재출발</th></tr></thead>
+    <tbody id="walkRows"></tbody>
+  </table></div>
+</section>
+
+<!-- 3. 발성 훈련 (예시) -->
+<section class="card">
+  <div class="head"><h2>3. 발성 훈련 (F4)</h2><span class="badge info" id="voiceBadge">-</span></div>
+  <div class="kpis" id="voiceKpis"></div>
+  <div class="tablewrap"><table>
+    <thead><tr><th>날짜</th><th>하루 최고 목소리 크기</th><th>목표 대비</th></tr></thead>
+    <tbody id="voiceRows"></tbody>
+  </table></div>
+</section>
+
+<!-- 4. 복약 (예시) -->
+<section class="card">
+  <div class="head"><h2>4. 복약 (F1)</h2><span class="badge info" id="medBadge">-</span></div>
+  <div class="kpis" id="medKpis"></div>
+  <div class="tablewrap"><table>
+    <thead><tr><th>날짜</th><th>복용 확인 (확인 / 예정)</th></tr></thead>
+    <tbody id="medRows"></tbody>
+  </table></div>
+  <h3 style="font-size:15px">복약 알림 이력</h3>
+  <div class="tablewrap"><table>
+    <thead><tr><th>예정 시각</th><th>약 이름</th><th>결과</th><th>확인 방법</th><th>확인 시각</th></tr></thead>
+    <tbody id="medLog"></tbody>
+  </table></div>
+  <div class="muted" id="noMedLog">이번 주 복약 기록이 없어요. 로봇이 복약 알림을 하면 여기에 쌓여요.</div>
+</section>
+
+<footer>PD-Dog는 치료를 대신하는 의료기기가 아니라, 전문가가 정한 훈련을 집에서 이어가도록 돕는 보조 도구예요.<br>
+<span class="noprint" id="footNote">"데이터 없음"은 아직 로봇이 기록을 보내지 않은 항목이에요.</span></footer>
+</div>
+
+<script src="/config.js"></script>
+<script src="/demo-data.js"></script>
+<script type="module">
+// Controller + View. 1 = alerts, 2~4 = rpc daily_stats, 복약 이력 = medication_logs + medication_schedule
+import {createStore, requireLogin} from "/js/store.js";
+import * as M from "/js/model.js";
+
+const store = await createStore();
+if (!await requireLogin(store)) await new Promise(() => {});
+const MOCK = store.mode === "mock";
+const $ = id => document.getElementById(id);
+const {CRIT_SOURCES: CRIT, kind, fmtDuration, has} = M;
+function el(tag, text, className){
+  const e = document.createElement(tag);
+  if (text !== undefined) e.textContent = text;
+  if (className) e.className = className;
+  return e;
+}
+const val = (n, unit) => { const d = el("span"); d.append(String(n), el("small", unit)); return d; };
+const kpi = (label, n, unit) => { const k = el("div", undefined, "kpi"); k.append(el("div", label, "label")); const v = el("div", undefined, "value"); v.append(val(n, unit)); k.append(v); return k; };
+const numTd = n => el("td", String(n), "r" + (n ? "" : " zero"));
+function barTd(value, max, text){
+  const td = el("td"), wrap = el("div", undefined, "barcell"), bar = el("div", undefined, "bar"), fill = el("div", undefined, "fill");
+  fill.style.width = (max ? Math.max(0, Math.min(100, value / max * 100)) : 0) + "%";
+  bar.append(fill); wrap.append(bar, el("b", text)); td.append(wrap); return td;
+}
+const setBadge = (id, hasData) => { $(id).textContent = MOCK ? "예시 데이터" : hasData ? "실시간 기록" : "데이터 없음";
+                                    $(id).className = "badge " + (MOCK ? "demo" : hasData ? "live" : "info"); };
+if (MOCK){ $("modeChip").hidden = false; $("incSimWrap").hidden = false; }
+
+// 최근 7일 (오래된 날 → 오늘), 브라우저 현지 시간 기준
+const days = Array.from({length: 7}, (_, i) => { const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() - (6 - i)); return d; });
+const dayLabel = (d, i) => `${d.getMonth() + 1}/${d.getDate()} (${"일월화수목금토"[d.getDay()]})${i === 6 ? " 오늘" : ""}`;
+$("period").textContent = `${days[0].toLocaleDateString("ko-KR")} ~ ${days[6].toLocaleDateString("ko-KR")} · 작성 ${new Date().toLocaleString("ko-KR")}`;
+const fail = (id, e) => { $(id).textContent = "기록을 불러오지 못했어요: " + M.errorMessage(e); };
+
+/* ---------- 1. 안전 알람 ---------- */
+let report = null;
+async function loadAlarms(){
+  try{ report = (await store.alertsSince(days[0].toISOString())).map(M.toEvent); renderAlarms(); }
+  catch(e){ fail("alarmNote", e); }
+}
+function renderAlarms(){
+  const inc = $("incSim").checked;
+  const events = report.filter(e => e.source !== "test" && (inc || !e.simulated));
+  const dayIdx = e => { const d = new Date(e.created_at); d.setHours(0, 0, 0, 0); return days.findIndex(x => x.getTime() === d.getTime()); };
+  const rows = days.map(() => ({camera: 0, no_motion: 0, sos: 0, med: 0, resp: []}));
+  events.forEach(e => {
+    const i = dayIdx(e); if (i < 0) return;
+    const r = rows[i];
+    if (e.source === "camera") r.camera++;
+    else if (e.source === "no_motion") r.no_motion++;
+    else if (e.source === "touch" || e.source === "voice") r.sos++;
+    else if (e.source === "medication_missed") r.med++;
+    if (e.acknowledged_at) r.resp.push(new Date(e.acknowledged_at) - new Date(e.created_at));
+  });
+  const avg = a => a.length ? a.reduce((s, x) => s + x, 0) / a.length : null;
+  $("alarmRows").replaceChildren(...rows.map((r, i) => {
+    const tr = el("tr");
+    tr.append(el("td", dayLabel(days[i], i)), numTd(r.camera), numTd(r.no_motion), numTd(r.sos), numTd(r.med), el("td", fmtDuration(avg(r.resp)), "r"));
+    return tr;
+  }));
+  const sum = k => rows.reduce((s, r) => s + r[k], 0);
+  const allResp = rows.flatMap(r => r.resp);
+  const foot = el("tr");
+  foot.append(el("td", "합계"), numTd(sum("camera")), numTd(sum("no_motion")), numTd(sum("sos")), numTd(sum("med")), el("td", fmtDuration(avg(allResp)), "r"));
+  $("alarmFoot").replaceChildren(foot);
+
+  const crit = events.filter(e => CRIT.includes(e.source)).length;
+  $("kCrit").replaceChildren(val(crit, "건"));
+  $("kMed").replaceChildren(val(sum("med"), "건"));
+  $("kResp").textContent = fmtDuration(avg(allResp));
+  const delayed = events.filter(e => e.delayed_ms).length;
+  $("alarmNote").textContent = (MOCK ? (inc ? "시연 기록을 포함한 결과예요. " : "시연 기록은 빠져 있어요. ") : "")
+    + "배터리·연결 끊김 같은 로봇 상태 알람은 표에서 빠져요."
+    + (delayed ? ` 로봇이 오프라인일 때 생겨 늦게 도착한 알람 ${delayed}건은 발생 시각 기준으로 집계했어요.` : "");
+
+  const noted = events.filter(e => e.note);
+  $("notes").replaceChildren(...noted.map(e => {
+    const li = el("li");
+    const head = el("div", `${new Date(e.created_at).toLocaleString("ko-KR", {month:"numeric", day:"numeric", hour:"numeric", minute:"2-digit"})} · ${kind(e.source).name}`, "muted");
+    if (e.simulated) head.append(el("span", "시연", "sim"));
+    li.append(head, el("div", e.note));
+    return li;
+  }));
+  $("noNotes").hidden = noted.length > 0;
+}
+$("incSim").addEventListener("change", () => report && renderAlarms());
+
+/* ---------- 2~4. 훈련·복약 (rpc daily_stats) ---------- */
+const total = a => a.reduce((s, x) => s + (x || 0), 0);
+async function loadStats(){
+  let dv, settings;
+  try{ [dv, settings] = await Promise.all([store.dailyStats(7).then(M.dailyView), store.getSettings()]); }
+  catch(e){ fail("footNote", e); return; }
+
+  // 2. 보행
+  setBadge("walkBadge", M.anyValue(dv.walkSessions));
+  const bpmLast = [...dv.walkBpm].reverse().find(has);
+  $("walkKpis").replaceChildren(kpi("주간 훈련 횟수", total(dv.walkSessions), "회"), kpi("주간 훈련 시간", Math.round(total(dv.walkMinutes) * 10) / 10, "분"),
+    kpi("최근 평균 박자", has(bpmLast) ? bpmLast : "-", has(bpmLast) ? "보/분" : ""), kpi("멈춤 후 재출발", total(dv.restarts), "회"));
+  const maxMin = Math.max(1, ...dv.walkMinutes);
+  $("walkRows").replaceChildren(...days.map((d, i) => {
+    const tr = el("tr");
+    tr.append(el("td", dayLabel(d, i)), numTd(dv.walkSessions[i]), barTd(dv.walkMinutes[i], maxMin, `${dv.walkMinutes[i]}분`),
+              el("td", has(dv.walkBpm[i]) ? `${dv.walkBpm[i]}보/분` : "-", "r"), numTd(dv.restarts[i]));
+    return tr;
+  }));
+
+  // 3. 발성 (그날의 목표가 기록돼 있으면 그 값, 없으면 지금 설정값)
+  const known = dv.voiceDb.map((v, i) => [v, dv.voiceTarget[i] ?? settings.target_db]).filter(([v]) => has(v));
+  setBadge("voiceBadge", known.length > 0);
+  const hitDays = known.filter(([v, t]) => v >= t).length;
+  const firstLast = known.length > 1 ? Math.round((known.at(-1)[0] - known[0][0]) * 10) / 10 : null;
+  $("voiceKpis").replaceChildren(kpi("지금 목표", settings.target_db, "dB"), kpi("주간 최고", known.length ? Math.max(...known.map(k => k[0])) : "-", known.length ? "dB" : ""),
+    kpi("목표 달성", hitDays, `/${known.length}일`), kpi("첫 기록 대비", firstLast == null ? "-" : (firstLast >= 0 ? "+" : "") + firstLast, firstLast == null ? "" : "dB"));
+  $("voiceRows").replaceChildren(...days.map((d, i) => {
+    const v = dv.voiceDb[i], t = dv.voiceTarget[i] ?? settings.target_db, tr = el("tr");
+    if (!has(v)){ tr.append(el("td", dayLabel(d, i)), el("td", "기록 없음", "zero"), el("td", "-", "zero")); return tr; }
+    // 막대 = 목표 대비 비율 (0부터 시작해야 크기를 속이지 않아요)
+    tr.append(el("td", dayLabel(d, i)), barTd(v, t, `${v}dB`),
+              el("td", v >= t ? "✓ 달성" : `목표까지 ${Math.round((t - v) * 10) / 10}dB`, v >= t ? "hit" : ""));
+    return tr;
+  }));
+
+  // 4. 복약
+  const taken = total(dv.dosesTaken), planned = total(dv.dosesScheduled);
+  setBadge("medBadge", planned > 0);
+  $("medKpis").replaceChildren(kpi("주간 복용률", planned ? Math.round(taken / planned * 100) : "-", planned ? "%" : ""), kpi("복용 확인", `${taken}/${planned}`, "회"));
+  $("medRows").replaceChildren(...days.map((d, i) => {
+    const tr = el("tr");
+    tr.append(el("td", dayLabel(d, i)), dv.dosesScheduled[i] ? barTd(dv.dosesTaken[i], dv.dosesScheduled[i], `${dv.dosesTaken[i]}/${dv.dosesScheduled[i]}`) : el("td", "기록 없음", "zero"));
+    return tr;
+  }));
+}
+
+/* ---------- 복약 알림 이력 ---------- */
+const MED_RESULT = {confirmed: "✓ 복용 확인", missed: "✗ 미확인 (30분)", pending: "⏰ 알림 중"};
+async function loadMedLog(){
+  let logs, schedule;
+  try{ [logs, schedule] = await Promise.all([store.medicationLogs(days[0].toISOString()), store.listSchedule()]); }
+  catch(e){ fail("noMedLog", e); return; }
+  const nameOf = id => schedule.find(s => s.id === id)?.name || "";
+  $("medLog").replaceChildren(...logs.map(l => {
+    const tr = el("tr");
+    tr.append(el("td", new Date(l.due_at).toLocaleString("ko-KR", {month: "numeric", day: "numeric", weekday: "short", hour: "2-digit", minute: "2-digit"})),
+              el("td", nameOf(l.schedule_id) || "-"), el("td", MED_RESULT[l.status] || l.status, "st-" + l.status),
+              el("td", l.method === "touch" ? "머리 터치" : l.method === "voice" ? "음성" : "-"),
+              el("td", l.confirmed_at ? new Date(l.confirmed_at).toLocaleTimeString("ko-KR", {hour: "2-digit", minute: "2-digit"}) : "-"));
+    return tr;
+  }));
+  $("noMedLog").hidden = logs.length > 0;
+}
+
+loadAlarms(); loadStats(); loadMedLog();
+</script>
+</body>
+</html>

@@ -16,10 +16,14 @@
 
 | 항목 | 현재 상태 | 담당 | 영향 |
 |---|---|---|---|
-| 포즈 Broadcast 메시지 수 | 24시간 0.4초 전송 시 월 약 650만 건 → 무료 한도 초과 가능. 시청 중일 때만 / 상태 변화 시만 보내기 중 선택 | A·D | [db.md](db.md#포즈-realtime-broadcast-검토-결과) |
+| 포즈 Broadcast 메시지 수 | 24시간 0.4초 전송 시 월 약 650만 건 → 무료 한도 초과 가능. **대시보드는 자세 보기를 열었을 때만 구독하도록 바꿈 (2026-11-26).** Pi(A)가 "보는 사람 있을 때만" 보내려면 Presence 정책(`realtime.messages` presence insert/select) 마이그레이션 필요 → A·D 합의 | A·D | [db.md](db.md#포즈-realtime-broadcast-검토-결과), dashboard/progress.md |
 | Supabase 요금제 | 무료 플랜은 1주 미사용 시 프로젝트 일시정지 가능, DB 500MB 등 → 시연 일정에 맞춰 확인 | D | 운영 |
 | 대시보드 로그인 방식 | Supabase Auth (이메일 초대 제안), 공개 가입 끄기 | D | RLS (`care_team`) |
-| 004 적용 확인 | 로컬 Supabase에서는 확인됨. 클라우드 첫 적용 때 pg_cron 확장 켜져 있는지 확인 | D | 첫 적용 때 |
+| 004 적용 확인 | 클라우드 `pd-dog`에 적용함 (2026-11-26). pg_cron 동작 확인(연결 끊김 알람 생성). 새 프로젝트는 Realtime이 첫 접속 뒤 초기화돼야 004가 성공 | D | 완료 |
+| 대시보드 → 로봇 명령 통로 | 리듬 큐잉 원격 시작/정지 통로 없음 (설정값만 DB로 전달). 대시보드는 인터페이스+Mock만 있음. 방식(명령 표 + Pi 조회 / Broadcast) 과 안전 조건 합의 필요 | B·C·D | F3, dashboard/progress.md |
+| Pi 대기열 상태 보고 | 대시보드에 "동기화 대기 N건"을 보이려면 Pi가 `outbox` 길이를 status에 보내야 함 (`robot_status`에 컬럼 추가 필요) | B·D | 오프라인 표시 |
+| 복약 요일·Pi 설정 반영 | `medication_schedule`에 요일 없음 (요청됨). 추가 시 Pi `fetch_settings`·ESP32 F1도 수정. Pi가 설정을 부팅 때만 가져옴 → 변경 반영 주기 결정 (B) | B·D | F1 |
+| Supabase 보안 점검 경고 | 트리거 함수 3개 `search_path` 미지정(경고), 유출 비밀번호 검사 꺼짐(Auth 설정). 나머지 경고는 설계상 의도 | D | 005 마이그레이션 후보 |
 | 화자 임베딩 저장 위치 | Supabase에 올리지 않음(Pi 로컬). SQLite는 대기열 전용이므로 파일(예: `~/pd-dog-data/speakers/`) 등 B가 결정 | B | F5 |
 | Pi 시계 | 대기열 알람은 Pi `occurred_at` 사용 → NTP 필수. 오프라인 부팅 시 Pi 5 RTC 배터리 필요 여부 | B | 알람 시각 |
 
@@ -59,7 +63,7 @@
 | 여러 사람이 보일 때 | 구현됨 (사람별 추적·F6, 2명 이상이면 F7 멈춤). 남은 것: 겹침·엇갈림 때 번호 뒤바뀜 실측, 대시보드에 여러 명 표시가 필요하면 api.md 변경(D와 협의). 환자 본인 구분(얼굴 등)은 하지 않음 | A·D | F6·F7 |
 | 비전 루프 main.py 연결 | `VisionMonitor`를 카메라·Hailo와 메인 루프에 연결, 0.4초 포즈 전송. `main.py`는 B 담당 → 먼저 알리고 진행 | A·B | F6·F7 동작 |
 | 로봇 이동 모드 목록 | F7은 이동 중 모드에서 누적 중단. 지금 프로토콜 이동 모드는 `walking`뿐. `approaching` 등 추가되면 [serial-protocol.md](serial-protocol.md) `mode`와 `pi/app/config.py` 목록에 같이 반영 | A·C·D | F7 |
-| 대시보드 기술 스택 | 대시보드 README 확인 필요 | D | Supabase 클라이언트 |
+| 대시보드 기술 스택 | 이관 완료(2026-11-26): 지금은 Python 서버 + 정적 HTML + SQLite. Supabase 직접 연결로 바꿀 때 프론트 방식(정적 HTML + supabase-js CDN / 빌드 도구) 결정 | D | Supabase 클라이언트 |
 | environment.yml 새 패키지의 aarch64 + Python 3.13 설치 | 지금 목록은 Pi에서 설치 확인됨 (2026-11-26). 앞으로 추가할 패키지(onnxruntime, ultralytics 등)는 추가할 때 Pi에서 `conda env update` 확인 | A·B | `environment.yml` |
 | YOLO11·YOLO26 pose의 hailo8l `.hef` | 기성 `.hef` 존재 여부 확인. 없으면 DFC 변환 환경 준비 (x86 Linux/WSL2, 공용 conda와 분리, 대상 `hailo8l`) | A | F6·F7, [setup.md](setup.md) 2-3-1 |
 | 시리얼 baud·메시지 형식 | 초안 작성됨 | B·D | [serial-protocol.md](serial-protocol.md) |

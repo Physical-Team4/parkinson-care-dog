@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PD-Dog 설정</title>
+<link rel="icon" href="data:,">
+<style>
+:root{
+  --bg:#f3f2ee; --panel:#fff; --panel-2:#f8f7f4; --ink:#1b2220; --ink-2:#46514d; --muted:#6b7570;
+  --line:#e3e1db; --brand:#0e7c6b; --brand-soft:#e2f2ee; --ok:#2b8a3e; --ok-soft:#e8f6ec;
+  --crit:#c92a2a; --crit-soft:#fdeaea; color-scheme:light;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#121614; --panel:#1a1f1d; --panel-2:#202624; --ink:#e7ece9; --ink-2:#c2cbc7; --muted:#97a29d;
+    --line:#2d3431; --brand:#4fd1b5; --brand-soft:#15302a; --ok:#69db7c; --ok-soft:#15291b;
+    --crit:#ff6b6b; --crit-soft:#381c1c; color-scheme:dark;
+  }
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);
+  font-family:system-ui,-apple-system,"Malgun Gothic","Apple SD Gothic Neo",sans-serif;font-size:15px;line-height:1.5}
+.wrap{max-width:760px;margin:0 auto;padding:16px;display:grid;gap:16px}
+h1,h2,p{margin:0}
+h1{font-size:22px} h2{font-size:17px}
+.muted{color:var(--muted);font-size:13.5px}
+a{color:var(--brand)}
+button,input{font:inherit}
+button{cursor:pointer;border-radius:10px;border:1px solid var(--line);background:var(--panel);color:var(--ink);padding:9px 14px}
+:focus-visible{outline:3px solid var(--brand);outline-offset:2px}
+header{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;justify-content:space-between}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:18px;display:grid;gap:12px}
+.fid{font-size:11.5px;font-weight:700;color:var(--brand)}
+input[type=text],input[type=time],input[type=number]{border:1px solid var(--line);border-radius:10px;padding:9px 10px;background:var(--panel-2);color:var(--ink)}
+.dose{display:flex;gap:8px;align-items:center}
+.dose input[type=text]{flex:1;min-width:0}
+.dose button{padding:8px 12px}
+.slider{display:grid;grid-template-columns:1fr auto;gap:6px 12px;align-items:center}
+.slider input[type=range]{width:100%;accent-color:var(--brand)}
+.slider output{font-size:22px;font-weight:800;font-variant-numeric:tabular-nums;min-width:110px;text-align:right}
+.slider output small{font-size:13px;color:var(--muted);font-weight:600;margin-left:2px}
+.save{position:sticky;bottom:12px;display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;
+  background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:12px 14px;box-shadow:0 4px 16px rgba(0,0,0,.08)}
+.primary{background:var(--brand);color:#fff;border-color:var(--brand);font-weight:800;padding:10px 22px}
+#msg{font-weight:600}
+#msg.ok{color:var(--ok)} #msg.err{color:var(--crit)}
+/* 복약 알림 편집 (기존 모양 재사용) */
+.dose{flex-wrap:wrap}
+.dose input[type=text]{flex:1 1 150px}   /* 좁은 화면에서는 이름 칸이 다음 줄로 넘어가 넓게 보이게 */
+.dose.off input{opacity:.55}
+.dose label.toggle{display:flex;gap:6px;align-items:center;font-size:13.5px;white-space:nowrap}
+.dose .confirm{display:flex;flex-wrap:wrap;gap:6px;align-items:center;width:100%;background:var(--crit-soft);color:var(--crit);
+  border-radius:10px;padding:8px 10px;font-weight:600;font-size:14px}
+.danger{background:var(--crit);color:#fff;border-color:var(--crit);font-weight:700}
+.rowmsg{width:100%;font-size:13px;font-weight:600}
+.rowmsg.ok{color:var(--ok)} .rowmsg.err{color:var(--crit)}
+.chip{display:inline-block;border:1px dashed var(--brand);color:var(--brand);border-radius:999px;padding:1px 8px;font-size:12px;font-weight:700}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <div>
+    <div class="muted">PD-Dog 파킨슨병 재활돌봄로봇</div>
+    <h1>⚙️ 치료사·보호자 설정</h1>
+    <div class="muted">여기서 정한 값을 로봇이 가져가서 사용해요. 전문가가 정한 훈련 목표를 넣어 주세요.</div>
+  </div>
+  <div style="display:grid;gap:4px;justify-items:end"><a href="/">← 대시보드로</a><span class="chip" id="modeChip" hidden>🧪 Mock 모드</span></div>
+</header>
+
+<section class="card">
+  <div><div class="fid">F1</div><h2>💊 복약 시간</h2></div>
+  <div class="muted">로봇이 이 시간에 다가가 알려줘요. 30분 동안 터치 확인이 없으면 보호자에게 알림이 가요.
+    <b>의사·약사가 정한 시간과 약 이름만</b> 넣어 주세요. 이 화면은 복용량·시간을 정해 주지 않아요. (<span id="doseCount">-</span>/8개)</div>
+  <div id="doses" style="display:grid;gap:8px"></div>
+  <div class="dose" id="newDose">
+    <input type="time" id="newTime" value="09:00" aria-label="새 복약 시각">
+    <input type="text" id="newName" maxlength="20" placeholder="약 이름 (예: 아침 약)" aria-label="새 약 이름">
+    <button id="addDose" type="button">＋ 복약 알림 추가</button>
+    <div class="rowmsg" id="newMsg" aria-live="polite"></div>
+  </div>
+  <div class="muted">각 줄은 바로 저장돼요. 돌봄팀 계정 모두가 같은 일정을 함께 관리해요 (로봇 1대 = 환자 1명). 지난 복용 기록은 <a href="/report">📄 리포트</a>에서 봐요.</div>
+</section>
+
+<section class="card">
+  <div><div class="fid">F3</div><h2>👣 리듬 큐잉 보행</h2></div>
+  <label class="slider">
+    <span>목표 박자 <span class="muted">· 분당 걸음 수 (80~110)</span></span>
+    <output id="bpmOut"></output>
+    <input type="range" id="bpm" min="80" max="110" step="1">
+  </label>
+  <label class="slider">
+    <span>따라오는 거리 한도 <span class="muted">· 이보다 멀어지면 로봇이 멈춰서 기다려요 (50~300cm)</span></span>
+    <output id="followOut"></output>
+    <input type="range" id="follow" min="50" max="300" step="10">
+  </label>
+</section>
+
+<section class="card">
+  <div><div class="fid">F4</div><h2>🗣️ 발성 훈련</h2></div>
+  <label class="slider">
+    <span>목표 목소리 크기 <span class="muted">· 이보다 크게 말해야 로봇이 반응해요 (50~90dB)</span></span>
+    <output id="voiceOut"></output>
+    <input type="range" id="voice" min="50" max="90" step="1">
+  </label>
+  <div class="muted">LSVT LOUD 방식처럼 주마다 조금씩(1~2dB) 올리는 걸 권해요.</div>
+</section>
+
+<div class="save">
+  <span id="msg" class="muted" aria-live="polite">불러오는 중…</span>
+  <button class="primary" id="saveBtn" type="button">💾 훈련 목표 저장</button>
+</div>
+</div>
+
+<script src="/config.js"></script>
+<script src="/demo-data.js"></script>
+<script type="module">
+// Controller + View. 복약 일정 = medication_schedule (줄마다 바로 저장), 훈련 목표 = settings (저장 버튼)
+import {createStore, requireLogin} from "/js/store.js";
+import * as M from "/js/model.js";
+
+const store = await createStore();
+if (!await requireLogin(store)) await new Promise(() => {});
+const $ = id => document.getElementById(id);
+function el(tag, text, className){
+  const e = document.createElement(tag);
+  if (text !== undefined) e.textContent = text;
+  if (className) e.className = className;
+  return e;
+}
+function setMsg(text, kind){ $("msg").textContent = text; $("msg").className = kind || "muted"; }
+if (store.mode === "mock") $("modeChip").hidden = false;
+
+/* ---------- F1 복약 알림 ---------- */
+let schedule = [];
+async function loadSchedule(){
+  try{ schedule = await store.listSchedule(); renderSchedule(); }
+  catch(e){ $("newMsg").textContent = "복약 알림을 불러오지 못했어요: " + M.errorMessage(e); $("newMsg").className = "rowmsg err"; }
+}
+function renderSchedule(){
+  $("doses").replaceChildren(...schedule.map(doseRow));
+  $("doseCount").textContent = schedule.length;
+  $("addDose").disabled = schedule.length >= M.LIMITS.DOSES_MAX;
+  $("addDose").title = schedule.length >= M.LIMITS.DOSES_MAX ? "최대 8개예요" : "";
+}
+
+function doseRow(d){
+  const row = el("div", undefined, "dose" + (d.enabled ? "" : " off"));
+  const time = el("input"); time.type = "time"; time.value = M.hm(d.time_of_day); time.required = true; time.setAttribute("aria-label", "복약 시각");
+  const name = el("input"); name.type = "text"; name.value = d.name || ""; name.maxLength = M.LIMITS.DOSE_NAME_MAX;
+  name.placeholder = "약 이름 (예: 아침 약)"; name.setAttribute("aria-label", "약 이름");
+  const toggle = el("label", undefined, "toggle"); const on = el("input"); on.type = "checkbox"; on.checked = d.enabled;
+  toggle.append(on, el("span", "알림 켜기"));
+  const save = el("button", "저장"); save.type = "button"; save.hidden = true;
+  const del = el("button", "삭제"); del.type = "button";
+  const msg = el("div", "", "rowmsg"); msg.setAttribute("aria-live", "polite");
+  const say = (text, kind) => { msg.textContent = text; msg.className = "rowmsg " + (kind || ""); };
+  const dirty = () => { save.hidden = time.value === M.hm(d.time_of_day) && name.value === (d.name || ""); };
+  [time, name].forEach(i => i.addEventListener("input", dirty));
+  name.addEventListener("keydown", e => { if (e.key === "Enter" && !save.hidden) save.click(); });
+
+  async function apply(patch, okText){
+    const err = patch.time_of_day || patch.name !== undefined
+      ? M.validateDose({time_of_day: patch.time_of_day || d.time_of_day, name: patch.name ?? d.name}, schedule, d.id) : null;
+    if (err){ say(err, "err"); return; }
+    [save, del, on].forEach(b => b.disabled = true);
+    try{
+      const updated = await store.updateSchedule(d.id, patch);
+      schedule = schedule.map(x => x.id === d.id ? updated : x).sort((a, b) => a.time_of_day.localeCompare(b.time_of_day));
+      renderSchedule();
+      const fresh = [...$("doses").children][schedule.findIndex(x => x.id === d.id)];
+      fresh?.querySelector(".rowmsg")?.replaceChildren(okText);
+      fresh?.querySelector(".rowmsg")?.classList.add("ok");
+    }catch(e){
+      say("저장 실패: " + M.errorMessage(e), "err");
+      [save, del, on].forEach(b => b.disabled = false);
+      if (patch.enabled !== undefined) on.checked = d.enabled;
+    }
+  }
+  save.addEventListener("click", () => apply({time_of_day: time.value, name: name.value.trim() || null}, "✓ 저장했어요. 로봇이 다음에 설정을 가져갈 때 반영돼요."));
+  on.addEventListener("change", () => apply({enabled: on.checked}, on.checked ? "✓ 알림을 켰어요." : "✓ 알림을 껐어요 (일정은 남아 있어요)."));
+
+  // 삭제 전 확인 (브라우저 팝업 대신 줄 안에서 묻기 — 큰 버튼, 실수 방지)
+  del.addEventListener("click", () => {
+    if (schedule.length <= M.LIMITS.DOSES_MIN){ say("복약 알림은 최소 1개는 있어야 해요. 대신 \"알림 켜기\"를 끌 수 있어요.", "err"); return; }
+    const box = el("div", undefined, "confirm");
+    box.append(el("span", `${M.hm(d.time_of_day)} ${d.name || ""} 알림을 삭제할까요? 되돌릴 수 없어요.`));
+    const yes = el("button", "삭제", "danger"); yes.type = "button";
+    const no = el("button", "취소"); no.type = "button";
+    box.append(yes, no);
+    msg.replaceWith(box); no.focus();
+    no.addEventListener("click", () => box.replaceWith(msg));
+    yes.addEventListener("click", async () => {
+      yes.disabled = no.disabled = true;
+      try{
+        await store.deleteSchedule(d.id);
+        schedule = schedule.filter(x => x.id !== d.id);
+        renderSchedule();
+        $("newMsg").textContent = `✓ ${M.hm(d.time_of_day)} 알림을 삭제했어요.`; $("newMsg").className = "rowmsg ok";
+      }catch(e){ box.replaceWith(msg); say("삭제 실패: " + M.errorMessage(e), "err"); }
+    });
+  });
+  row.append(time, name, toggle, save, del, msg);
+  return row;
+}
+
+$("addDose").addEventListener("click", async () => {
+  const row = {time_of_day: $("newTime").value, name: $("newName").value.trim() || null, enabled: true};
+  const err = M.validateDose(row, schedule);
+  const say = (t, k) => { $("newMsg").textContent = t; $("newMsg").className = "rowmsg " + k; };
+  if (err){ say(err, "err"); return; }
+  $("addDose").disabled = true;
+  try{
+    const added = await store.addSchedule(row);
+    schedule = [...schedule, added].sort((a, b) => a.time_of_day.localeCompare(b.time_of_day));
+    renderSchedule();
+    $("newName").value = "";
+    say(`✓ ${M.hm(added.time_of_day)} 알림을 추가했어요.`, "ok");
+  }catch(e){ say("추가 실패: " + M.errorMessage(e), "err"); renderSchedule(); }
+});
+$("newName").addEventListener("keydown", e => { if (e.key === "Enter") $("addDose").click(); });
+
+/* ---------- F3·F4 훈련 목표 (settings) ---------- */
+const SLIDERS = [["bpm", "bpmOut", "보/분", "target_bpm"], ["follow", "followOut", "cm", "follow_limit_cm"], ["voice", "voiceOut", "dB", "target_db"]];
+let saved = null;
+function showSlider(id, out, unit){ $(out).replaceChildren(String($(id).value), el("small", unit)); }
+SLIDERS.forEach(([id, out, unit]) => $(id).addEventListener("input", () => { showSlider(id, out, unit); setMsg("저장하지 않은 변경이 있어요"); }));
+function fill(s){
+  saved = s;
+  SLIDERS.forEach(([id, out, unit, key]) => { $(id).value = s[key]; showSlider(id, out, unit); });
+  setMsg(s.updated_at ? `마지막 저장: ${new Date(s.updated_at).toLocaleString("ko-KR")}` : "아직 저장한 적 없어요 (기본값)");
+}
+async function loadSettings(){
+  try{ fill(await store.getSettings()); }
+  catch(e){ setMsg("설정을 불러오지 못했어요: " + M.errorMessage(e), "err"); }
+}
+$("saveBtn").addEventListener("click", async () => {
+  if (!saved) return;
+  const patch = {};
+  for (const [id, , , key] of SLIDERS){
+    const v = Number($(id).value);
+    if (!M.validSetting(key, v)){ setMsg("허용 범위를 벗어난 값이 있어요", "err"); return; }
+    if (v !== saved[key]) patch[key] = v;
+  }
+  if (!Object.keys(patch).length){ setMsg("바뀐 값이 없어요"); return; }
+  $("saveBtn").disabled = true;
+  try{
+    fill(await store.updateSettings(patch));
+    setMsg("✓ 저장했어요. 로봇이 다음에 설정을 가져갈 때 반영돼요.", "ok");
+  }catch(e){ setMsg("저장 실패: " + M.errorMessage(e), "err"); }
+  $("saveBtn").disabled = false;
+});
+
+loadSchedule();
+loadSettings();
+</script>
+</body>
+</html>

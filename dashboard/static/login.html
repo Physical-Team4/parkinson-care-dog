@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PD-Dog 로그인</title>
+<link rel="icon" href="data:,">
+<style>
+:root{
+  --bg:#f3f2ee; --panel:#fff; --panel-2:#f8f7f4; --ink:#1b2220; --muted:#6b7570;
+  --line:#e3e1db; --brand:#0e7c6b; --brand-soft:#e2f2ee; --crit:#c92a2a; --crit-soft:#fdeaea; color-scheme:light;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#121614; --panel:#1a1f1d; --panel-2:#202624; --ink:#e7ece9; --muted:#97a29d;
+    --line:#2d3431; --brand:#4fd1b5; --brand-soft:#15302a; --crit:#ff6b6b; --crit-soft:#381c1c; color-scheme:dark;
+  }
+}
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;display:grid;place-items:center;background:var(--bg);color:var(--ink);
+  font-family:system-ui,-apple-system,"Malgun Gothic","Apple SD Gothic Neo",sans-serif;font-size:15px;line-height:1.5}
+.card{width:min(380px,calc(100vw - 32px));background:var(--panel);border:1px solid var(--line);border-radius:18px;
+  padding:28px 24px;display:grid;gap:18px}
+.brand{display:flex;gap:12px;align-items:center}
+.logo{width:44px;height:44px;border-radius:12px;background:var(--brand-soft);display:grid;place-items:center;font-size:24px}
+h1{margin:0;font-size:20px}
+.muted{color:var(--muted);font-size:13.5px}
+label{display:grid;gap:6px;font-weight:600}
+input{font:inherit;border:1px solid var(--line);border-radius:10px;padding:11px 12px;background:var(--panel-2);color:var(--ink)}
+button{font:inherit;cursor:pointer;border:1px solid var(--brand);border-radius:10px;background:var(--brand);color:#fff;
+  font-weight:800;padding:12px}
+:focus-visible{outline:3px solid var(--brand);outline-offset:2px}
+.err{background:var(--crit-soft);color:var(--crit);border-radius:10px;padding:10px 12px;font-weight:600;font-size:14px}
+</style>
+</head>
+<body>
+<main class="card">
+  <div class="brand">
+    <div class="logo" aria-hidden="true">🐕</div>
+    <div>
+      <h1>PD-Dog 돌봄 대시보드</h1>
+      <div class="muted">보호자·치료사 로그인</div>
+    </div>
+  </div>
+  <div class="err" id="err" role="alert" hidden></div>
+  <form id="form">
+    <div style="display:grid;gap:14px">
+      <label>이메일 <input name="email" type="email" autocomplete="username" required autofocus></label>
+      <label>비밀번호 <input name="password" type="password" autocomplete="current-password" required></label>
+      <button type="submit" id="submit">로그인</button>
+    </div>
+  </form>
+  <div class="muted">돌봄팀에 초대받은 계정만 들어올 수 있어요. 비밀번호를 잊었으면 관리자(D)에게 재설정을 요청하세요.</div>
+</main>
+<script src="/config.js"></script>
+<script type="module">
+import {createStore, devSignIn} from "/js/store.js";
+import {errorMessage} from "/js/model.js";
+const $ = id => document.getElementById(id);
+const showErr = text => { $("err").textContent = text; $("err").hidden = false; };
+const store = await createStore().catch(e => { showErr("로그인 기능을 불러오지 못했어요: " + errorMessage(e)); return null; });
+if (store && (store.mode === "mock" || await store.session().catch(() => null))) location.replace("/");
+else if (store && await devSignIn(store).catch(e => { showErr("자동 로그인 실패: " + errorMessage(e)); return false; })) location.replace("/");
+$("form").addEventListener("submit", async ev => {
+  ev.preventDefault();
+  if (!store) return;
+  $("submit").disabled = true; $("err").hidden = true;
+  const f = new FormData($("form"));
+  try{
+    await store.signIn(String(f.get("email")).trim(), String(f.get("password")));
+    location.replace("/");
+  }catch(e){
+    showErr(/invalid login credentials/i.test(e.message || "") ? "이메일 또는 비밀번호가 맞지 않아요." : "로그인 실패: " + errorMessage(e));
+    $("submit").disabled = false;
+  }
+});
+</script>
+</body>
+</html>
