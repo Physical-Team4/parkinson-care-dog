@@ -11,6 +11,8 @@
 #   - In rhythmic cueing: follow the person behind
 #       person near -> normal stride, person farther -> smaller stride
 #       person lost -> stop and blink eyes, lost too long -> end rhythmic cueing
+# Added: laser module (KY-008, GPIO 23)
+#   - flashes on every beat together with the clap sound (rhythmic cueing only)
 
 import Hiwonder
 import time
@@ -59,11 +61,11 @@ TOUCH_PIN = 33               # touch sensor on port 3 (IO33): touched = 0, relea
 TOUCH_DEBOUNCE_MS = 500      # ignore extra taps within this time
 
 # ===== Rear ToF sensor (VL53L1X) settings =====
-TOF_BUS = 2                  # first I2C bus to try for the rear sensor (address 41 = 0x29)
+TOF_BUS = 1                  # rear sensor found on bus 1 in testing (address 41 = 0x29)
 TOF_ADDR = 0x29
 REAR_STOP_MM = 200           # rear obstacle closer than this -> stop (not in rhythmic cueing)
 REAR_STOP_ALL = False        # False: stop only backward walking, True: stop any walking
-DEBUG_REAR = False           # True: print rear distance every 0.5 s (for testing)
+DEBUG_REAR = True            # True: print rear distance every 0.5 s (set False when done testing)
 
 # person following (rhythmic cueing only)
 FOLLOW_NEAR_MM = 500         # person this close or closer -> full stride
@@ -74,6 +76,12 @@ LOST_CONFIRM_MS = 1000       # person missing this long -> stop and wait (blink 
 FOUND_CONFIRM_MS = 700       # person seen again this long -> walk again
 LOST_END_MS = 10000          # person missing this long -> end rhythmic cueing
 BEAT_WHILE_WAITING = True    # keep the clap beat while waiting for the person
+
+# ===== Laser (KY-008) settings =====
+LASER_ENABLED = True         # False: never turn the laser on
+LASER_PIN = 23               # S pin of the laser module (found with the pin finder test)
+LASER_FLASH_MS = 150         # how long the laser stays on for each beat
+LASER_DELAY_MS = 0           # delay the flash if the clap sound is heard later than the laser
 
 BEAT_MS = int(60000 / RHYTHM_BPM)      # 50 BPM -> 1200 ms
 STEP_MS = BEAT_MS                      # one step per beat
@@ -88,6 +96,7 @@ mechdog = MechDog()
 i2c1 = Hiwonder_IIC.IIC(1)
 i2csonar = Hiwonder_IIC.I2CSonar(i2c1)
 touch = machine.Pin(TOUCH_PIN, machine.Pin.IN, machine.Pin.PULL_UP)
+laser = machine.Pin(LASER_PIN, machine.Pin.OUT, value=0)    # laser off at start
 _last_touch_ms = 0
 
 _buses = {1: i2c1}
@@ -575,32 +584,52 @@ def eyes(r, g, b):
     pass
 
 
+def laser_set(on):
+  laser.value(1 if (on and LASER_ENABLED) else 0)
+
+
 _rear_hist = []
 _rear_debug_ms = 0
+_rear_last_new_ms = 0
+_rear_last_raw = None
 
 def update_rear():
   # read the rear sensor, keep the median of the last 5 readings in _REAR_DISTANCE
   global _REAR_DISTANCE
   global _rear_debug_ms
+  global _rear_last_new_ms
+  global _rear_last_raw
   if tof is None:
     return
+  now = time.ticks_ms()
   try:
     v = tof.read()
   except Exception as e:
     v = None
   if v == -1:
-    return                                    # no new measurement yet
-  _rear_hist.append(v)
-  if len(_rear_hist) > 5:
-    _rear_hist.pop(0)
-  valid = sorted([x for x in _rear_hist if x is not None])
-  if len(valid) * 2 > len(_rear_hist):
-    _REAR_DISTANCE = valid[len(valid) // 2]
+    # no new measurement: if this lasts too long, do not trust the old value
+    if time.ticks_diff(now, _rear_last_new_ms) > 500:
+      _REAR_DISTANCE = None
+      try:
+        tof._w(0x0086, b"\x01")             # clear interrupt in case it got stuck
+      except Exception:
+        pass
   else:
-    _REAR_DISTANCE = None
-  if DEBUG_REAR and time.ticks_diff(time.ticks_ms(), _rear_debug_ms) > 500:
-    _rear_debug_ms = time.ticks_ms()
-    print("rear:", _REAR_DISTANCE, "mm")
+    _rear_last_new_ms = now
+    _rear_last_raw = v
+    _rear_hist.append(v)
+    if len(_rear_hist) > 5:
+      _rear_hist.pop(0)
+    valid = sorted([x for x in _rear_hist if x is not None])
+    if len(valid) * 2 > len(_rear_hist):
+      _REAR_DISTANCE = valid[len(valid) // 2]
+    else:
+      _REAR_DISTANCE = None
+  if DEBUG_REAR and time.ticks_diff(now, _rear_debug_ms) > 500:
+    _rear_debug_ms = now
+    print("rear:", _REAR_DISTANCE, "raw:", _rear_last_raw,
+          "age:", time.ticks_diff(now, _rear_last_new_ms),
+          "blocked:", _rear_blocked, "dir:", _RUN_DIR)
   rear_guard()
 
 
@@ -661,6 +690,8 @@ def rhythmic_cueing():
   blink_ms = 0
   blink_on = False
   end_reason = "stopped"
+  laser_on_at = None
+  laser_off_at = None
 
   if following:
     eyes(0xff, 0x60, 0x00)                    # orange = waiting for the person
@@ -724,12 +755,23 @@ def rhythmic_cueing():
     if time.ticks_diff(now, next_beat) >= 0:
       if walking or BEAT_WHILE_WAITING:
         play_beat()
+        laser_on_at = time.ticks_add(now, LASER_DELAY_MS)    # flash with the clap
       beat_count += 1
       next_beat = time.ticks_add(next_beat, BEAT_MS)
+
+    # laser flash timing
+    if laser_on_at is not None and time.ticks_diff(now, laser_on_at) >= 0:
+      laser_set(True)
+      laser_on_at = None
+      laser_off_at = time.ticks_add(now, LASER_FLASH_MS)
+    if laser_off_at is not None and time.ticks_diff(now, laser_off_at) >= 0:
+      laser_set(False)
+      laser_off_at = None
     time.sleep_ms(5)
 
   if (_RUN_STEP==71):
     _RUN_STEP = 0
+  laser_set(False)
   mechdog.move(0,0)
   stop_sound()
   time.sleep(1)
