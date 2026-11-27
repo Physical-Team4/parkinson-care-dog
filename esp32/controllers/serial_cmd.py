@@ -6,6 +6,7 @@ import ujson
 import utime
 
 import config
+from services import sounds
 
 MAX_LINE = 256
 
@@ -19,10 +20,12 @@ def send(msg):
 
 
 class SerialCommands:
-    def __init__(self, heartbeat, rhythm, medication):
+    def __init__(self, heartbeat, rhythm, medication, mp3, buzzer):
         self.hb = heartbeat
         self.rhythm = rhythm
         self.medication = medication
+        self.mp3 = mp3
+        self.buzzer = buzzer
         self._poll = select.poll()
         self._poll.register(sys.stdin, select.POLLIN)
         self._buf = ""
@@ -74,13 +77,16 @@ class SerialCommands:
         elif t == "med_ack":
             self.medication.confirm(msg.get("due"), "voice")
         elif t == "pi_low":
-            # TODO(D): MP3 안내 config.MP3_TRACK_PI_LOW 재생 (트랙 번호 미정 → None이면 생략)
+            # "로봇을 충전해 주세요" (MP3_TRACK_PI_LOW, None이면 부저)
             self.pi_battery_low = True
+            sounds.play("pi_low", self.mp3, self.buzzer, utime.ticks_ms())
             log("pi battery low " + str(msg.get("pct")))
         elif t == "shutdown":
-            # Pi가 곧 꺼짐 → hb 끊김 전에 경보 모드로. TODO(D): 경보 모드 전환·MP3
+            # Pi가 곧 꺼짐 → hb 끊김 전에 무응답으로 보고 이후 경보는 현장 소리로 (D-001)
             self.pi_battery_low = True
             self.pi_shutting_down = True
+            self.hb.shutdown()
+            sounds.play("shutdown", self.mp3, self.buzzer, utime.ticks_ms())
             log("pi shutdown " + str(msg.get("reason")))
         else:
             # TODO(D): sound

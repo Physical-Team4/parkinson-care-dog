@@ -1,7 +1,7 @@
 # F1 복약 알림 (담당: D). 형식·규칙: docs/serial-protocol.md "F1 복약".
 #   시각 도래 → med_due + MP3 + 확인할 때까지 눈 파랑 깜빡임·작은 부저 "삐빅"(1분마다)
 #   → 짧은 터치(med_ok) 또는 음성(Pi med_ack)으로 확인
-#   30분 미확인(또는 다음 복약 시각이 먼저 옴) → med_missed, Pi 무응답이면 MP3 경보 (D-001)
+#   30분 미확인(또는 다음 복약 시각이 먼저 옴) → med_missed, Pi 무응답이면 현장 경보 (D-001, services/sounds.py)
 # ESP32에는 시계가 없다 → Pi가 settings의 now("HH:MM:SS")로 알려 준 시각 + 그 뒤 흐른 ticks로 계산.
 # now를 못 받았으면 알림을 하지 않는다 (시각을 추측하지 않음).
 # 블로킹 없음: tick()은 비교만 하고 바로 돌아온다.
@@ -9,6 +9,7 @@ import utime
 
 import config
 from controllers.serial_cmd import send, log
+from services import sounds
 
 DAY_MS = 24 * 60 * 60 * 1000
 
@@ -126,7 +127,7 @@ class Medication:
 
         if (self.pending_due is not None
                 and utime.ticks_diff(now, self._pending_since) >= config.MED_CONFIRM_TIMEOUT_MS):
-            self._miss(hb)
+            self._miss(hb, now)
 
         for due, due_ms in self._due_ms:
             elapsed = (tod - due_ms) % DAY_MS            # 자정을 넘겨도 (23:50 → 00:05 = 15분)
@@ -134,7 +135,7 @@ class Medication:
             if elapsed < config.MED_CONFIRM_TIMEOUT_MS and self._done.get(due) != due_day:
                 self._done[due] = due_day
                 if self.pending_due is not None:   # 앞 복약을 아직 안 먹었는데 다음 시각이 옴
-                    self._miss(hb)
+                    self._miss(hb, now)
                 self.pending_due = due
                 self._pending_since = now
                 send({"t": "med_due", "due": due})
@@ -143,10 +144,10 @@ class Medication:
                 log("med due " + due)
                 break
 
-    def _miss(self, hb):
+    def _miss(self, hb, now):
         send({"t": "med_missed", "due": self.pending_due})
         log("med missed " + self.pending_due)
         if not hb.pi_alive():
-            self._mp3.play(config.MP3_TRACK_ALARM)
-            log("med_missed: pi down -> mp3 alarm")
+            how = sounds.play("alarm", self._mp3, self._buzzer, now)
+            log("med_missed: pi down -> alarm " + str(how))
         self._clear()

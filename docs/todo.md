@@ -82,4 +82,4 @@
 | F4 dB 보정 순서 | 입력 볼륨(80%)을 고정한 **뒤에** 소음계로 `calibration_offset_db` 결정. 볼륨을 바꾸면 다시 보정 | B | F4 발성 훈련 |
 | F1 Pi 쪽 연결 | ESP32 복약 로직 구현됨 (2026-11-27, D). Pi가 할 일: ① 부팅 때 `fetch_settings()` → `settings`(`med_times`·`bpm`·`follow_limit_cm`·`now`) 전송, 설정 바뀌면 다시 보내기(주기 결정), 10분마다 `now`만 ② `med_due`/`med_ok`/`med_missed` → `MedicationLog` upsert (`robot_controller.py` TODO(D), `due` "HH:MM" → 오늘 그 시각, 1시간 넘게 미래면 어제). PC 중계로 먼저 시험 후 B와 합쳐 넣기. 실기기 시험(2026-11-27)에서 찾은 것: ③ 로봇이 다시 켜지면 대기 중이던 복약을 잊음 → `pending`이 영원히 남음 → Pi가 30분 지난 `pending`을 `missed`로 ④ 로봇이 다시 켜지며 30분 안의 복약을 다시 알리면 `med_due`가 이미 `confirmed`인 기록을 `pending`으로 덮어씀 → Pi는 confirmed/missed를 pending으로 되돌리지 않기 | B·D | F1 동작, 대시보드 오늘 복약 |
 | F1 복약 안내음·반복 | `MP3_TRACK_MEDICATION`·`MP3_TRACK_ALARM` 트랙 번호 미정 (None → 소리 없이 메시지만). 안내음을 1번만 낼지, 확인 전까지 몇 분마다 반복할지 결정 | D | F1 어르신이 못 들을 때 |
-| ESP32 `pi_low` 처리 | 플래그만 세움. MP3 트랙(`MP3_TRACK_PI_LOW`)·경보 모드 전환 구현 필요 | D | F1·F2 경보 |
+| ESP32 `pi_low`·`shutdown` 소리 | 구현됨 (2026-11-27, `esp32/services/sounds.py`): MP3 트랙이 None이면 내장 부저로 대신 (Pi 무응답 경보 포함). 남은 것: SD 카드 안내 음성 트랙 번호(`MP3_TRACK_ALARM`·`_PI_LOW`·`_SHUTDOWN`), 부저 경보 음량 실사용 확인 | D | F1·F2 경보 |

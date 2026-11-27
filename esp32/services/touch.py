@@ -1,5 +1,5 @@
 # F2 터치 위급 신고 + F1 터치 복약 확인 (담당: D).
-#   TOUCH_SOS_HOLD_MS 이상 누름 → touch_sos (손 떼기 전에 1번만). Pi 무응답이면 MP3 경보 (D-001)
+#   TOUCH_SOS_HOLD_MS 이상 누름 → touch_sos (손 떼기 전에 1번만). Pi 무응답이면 현장 경보 (D-001, services/sounds.py)
 #   짧게 터치 → 복약 대기 중이면 medication.confirm(due, "touch")
 #   TOUCH_MIN_TAP_MS 미만 → 스침·신호 튐으로 보고 무시
 # 눈 색: 누르는 중 주황, SOS 빨강, 짧은 터치 인식 초록(TOUCH_TAP_FEEDBACK_MS 동안).
@@ -10,6 +10,7 @@ import utime
 import config
 from controllers.serial_cmd import send, log
 from drivers.touch_pad import TouchPad
+from services import sounds
 
 ORANGE = (0xFF, 0x60, 0x00)
 RED = (0xFF, 0x00, 0x00)
@@ -17,7 +18,7 @@ GREEN = (0x00, 0xFF, 0x00)
 
 
 class Touch:
-    def __init__(self, medication, mp3, eyes):
+    def __init__(self, medication, mp3, eyes, buzzer):
         self.enabled = config.TOUCH_PIN is not None
         if not self.enabled:
             log("warn: TOUCH_PIN None -> touch off")
@@ -25,6 +26,7 @@ class Touch:
         self._medication = medication
         self._mp3 = mp3
         self._eyes = eyes
+        self._buzzer = buzzer
         self._pressed_at = None    # 누르기 시작한 시각 (안 누르면 None)
         self._sos_sent = False     # 이번 누름에서 touch_sos를 보냈는지
         self._eyes_off_at = None   # 초록 불 끌 시각
@@ -46,9 +48,9 @@ class Touch:
             self._eyes.color(*RED)
             send({"t": "touch_sos"})
             if not hb.pi_alive():
-                # 원격 알림 불가 → 현장 경보. 트랙 번호가 None이면 Mp3가 알아서 생략
-                self._mp3.play(config.MP3_TRACK_ALARM)
-                log("touch_sos: pi down -> mp3 alarm")
+                # 원격 알림 불가 → 현장 경보 (MP3_TRACK_ALARM, None이면 부저)
+                how = sounds.play("alarm", self._mp3, self._buzzer, now)
+                log("touch_sos: pi down -> alarm " + str(how))
         elif not pressing and self._pressed_at is not None:  # 방금 뗌
             held = utime.ticks_diff(now, self._pressed_at)
             self._pressed_at = None
