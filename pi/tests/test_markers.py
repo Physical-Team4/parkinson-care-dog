@@ -99,3 +99,41 @@ def test_viewer_markers_only_without_pose():
         worker.join(2)
         server.shutdown()
         server.server_close()
+
+
+def _obs(i, cx, side):
+    return MarkerObs(i, np.zeros((4, 2), np.float32), cx, side, 640, 480)
+
+
+def test_markers_only_measure_target_and_others():
+    """--markers-only 측정: 뷰어가 인식한 결과로 marker_test.py와 같은 값, 목표 외 번호는 따로."""
+    from pi.scripts.pose_viewer import MarkerMeasure, MarkerView
+    meas = MarkerMeasure()
+    view = MarkerView(mock.MockMarkerDetector(), None, None)
+    view.measure = meas
+    view(np.zeros((480, 640, 3), np.uint8))          # 측정 시작 전 프레임은 안 셈
+    assert meas.frames == 0
+    meas.start(10, now=0.0)
+    for t, found in [(1, [_obs(1, 0.75, 60.0)]), (2, [_obs(1, 0.75, 62.0), _obs(5, 0.1, 30.0)]), (3, []), (4, [_obs(1, 0.25, 64.0)])]:
+        meas.feed(found, 2.0 + t, now=t)
+    meas.feed([_obs(1, 0.5, 99.0)], 50.0, now=11)     # 시간 지난 프레임은 안 셈
+    elapsed = meas.stop(now=12)
+    out = meas.summary(elapsed, marker_cm=12, at_cm=100, target=1, note="정면")
+    text = "\n".join(out)
+    assert elapsed == 10 and "4프레임" in text and "스트리밍 병행" in text
+    assert "목표 #1: 인식률 75% (3/4), 한 변 중앙값 62.0px, 가로 위치 중앙값 +0.50, 초점거리 추정 517px" in text
+    assert "중앙값 4.5ms, 최대 6.0ms" in text
+    assert "목표 외 검출: #5 1프레임" in text
+    assert out[-1] == "| 12cm | 100cm | 75% | 62 | 517 | 정면 (pose_viewer 스트리밍 병행) |"
+    meas.start(10, now=20)                           # 반복 측정: 이전 기록 지움
+    assert meas.frames == 0 and meas.side == {}
+
+
+def test_markers_only_measure_target_not_seen():
+    from pi.scripts.pose_viewer import MarkerMeasure
+    meas = MarkerMeasure()
+    meas.start(10, now=0.0)
+    meas.feed([_obs(5, 0.5, 30.0)], 3.0, now=1)
+    out = meas.summary(meas.stop(now=10), marker_cm=None, at_cm=None, target=1, note="")
+    assert "목표 #1: 인식률 0% (0/1)" in out[-4] and "목표 외 검출: #5 1프레임" in out
+    assert out[-1] == "| ? | ? | 0% | - | - | (pose_viewer 스트리밍 병행) |"
