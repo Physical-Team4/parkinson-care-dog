@@ -20,7 +20,7 @@ def main():
     mp3 = Mp3()
     gait = Gait()
     rhythm = Rhythm(laser, gait, mp3)
-    medication = Medication()
+    medication = Medication(mp3)
     eyes = Eyes()
     touch = Touch(medication, mp3, eyes)
     serial = SerialCommands(hb, rhythm, medication)

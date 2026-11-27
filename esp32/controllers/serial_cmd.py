@@ -3,6 +3,7 @@
 import sys
 import select
 import ujson
+import utime
 
 import config
 
@@ -64,7 +65,11 @@ class SerialCommands:
         elif t == "laser":
             self.rhythm.force_laser(bool(msg.get("on")))
         elif t == "settings":
-            self.medication.set_times(msg.get("med_times"))
+            # 모든 필드 선택: 있는 것만 반영 (now만 오는 시계 맞추기 메시지도 있음)
+            if "now" in msg:
+                self.medication.set_clock(msg["now"], utime.ticks_ms())
+            if "med_times" in msg:
+                self.medication.set_times(msg["med_times"])
             self.rhythm.apply_settings(msg)
         elif t == "med_ack":
             self.medication.confirm(msg.get("due"), "voice")
