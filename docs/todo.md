@@ -55,7 +55,7 @@
 | 취침 시간대 설정 | 잠자리 마커·F7과 함께 사용. 대시보드 설정이면 DB 변경 필요 | A·D | F6·F7 |
 | 로봇 이동 (마커 길찾기) | 설계 초안 [navigation.md](navigation.md), D-012 제안. 다음: M0 실측(§11, 스크립트 `esp32/m0/`, `pi/scripts/marker_test.py`), `nav_move`·`nav_stop` 시리얼 메시지 C·D 검토 | A·C·D | 이동, 카메라 공유(이동 중 마커 / 도착 후 사람) |
 | MechDog 배터리 전압 읽기 | 구현됨 (2026-11-27, `esp32/drivers/battery.py`): `Hiwonder.Battery_power()`(mV) → 6.4V=0%, 8.4V=100%, 8.9V 초과는 외부 전원으로 보고 `null`. 보조배터리로만 시험함(12660 고정) → **LiPo로 켜고 값·변화 확인**, 배터리 스티커(2S/3S) 확인, 멀티미터와 비교 | D | 대시보드 배터리 |
-| `robot_tipped` 임계값 | IMU `read_angle()` 기울기(X·Y)로 판단. M0 `sonar_imu_test.py`로 측정 후 `esp32/config.py` | C·D | 넘어짐, 이동 안전 정지 |
+| `robot_tipped` 임계값 | 구현됨 (2026-11-27, `esp32/services/tilt.py`): 45° 이상 1초 → 넘어짐, 30° 미만 2초 → 해제. 정지 자세 실측(바닥 ±0.5°, 옆 -60~-77°, 앞뒤 34°/-42°, 뒤집기 ±178°)으로 정함, 실기기에서 대시보드 알람까지 확인. **보행 중 흔들림은 아직 안 잼** → C와 F3 보행하며 각도 기록 후 조정 | C·D | 넘어짐, 이동 안전 정지 |
 | `move()` 범위 밖 각도 | 위키 범위 -30~30, 원본 코드는 ±40·±50 사용 → 잘림/오류 확인 (M0) | A·C | 걷기 값 |
 | E-FPDS (넘어진 사람 데이터셋) | 바닥에 쓰러짐 vs 쓰러지지 않음(소파·침대에 누움 포함) 2클래스, 6,982장. 공식 페이지에 라이선스 없음 → 저자 문의 후 사용. 제공 가중치는 YOLOv3 → YOLOv8 재학습 + DFC 변환 필요. pose 모델이 누운 사람을 잘 못 잡을 때 검토 | A | F6 보조 모델 |
 | 가구 검출 확인 | `MZ_VERSION=v2.20.0 bash pi/scripts/download_models.sh yolov8s` → `python -m pi.scripts.furniture_check --inspect`(출력 형식 확인) → `--seconds 20`을 로봇 위치·각도별로. 사람이 person(0)으로 잡히는지로 종류 번호 확인. 결과로 본격 구현 여부 결정. pose와 같이 쓰려면 VDevice 공유 필요 | A | F6 "발견 시 이미 누움" |

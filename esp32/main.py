@@ -12,6 +12,7 @@ from drivers.mp3 import Mp3
 from services.gait import Gait
 from services.rhythm import Rhythm
 from services.medication import Medication
+from services.tilt import Tilt
 from services.touch import Touch
 
 
@@ -28,6 +29,7 @@ def main():
     touch = Touch(medication, mp3, eyes)
     serial = SerialCommands(hb, rhythm, medication)
     battery = Battery(log)
+    tilt = Tilt(log)
 
     last_status = 0
     try:
@@ -38,8 +40,9 @@ def main():
             medication.tick(now, serial, hb)
             buzzer.tick(now)
             touch.tick(now, serial, hb)
+            tilt.tick(now)
             if utime.ticks_diff(now, last_status) >= config.STATUS_INTERVAL_MS:
-                serial.send_status(rhythm, laser, battery, now)
+                serial.send_status(rhythm, laser, battery, tilt, now)
                 last_status = now
             utime.sleep_ms(5)
     except Exception as e:
