@@ -27,8 +27,8 @@
 | `stop` | — | 보행·박자 정지 ("멈춰"). 음성·dB 측정 전에도 보냄 | C |
 | `bpm` | `bpm` | 박자 변경 | C |
 | `laser` | `on` (bool) | 레이저 강제 켜기/끄기 (기본은 박자 연동) | C |
-| `settings` | `med_times` (["HH:MM", ...] 0~8개), `bpm`, `follow_limit_cm`, `now` ("HH:MM:SS", Pi 현지 시각) | 대시보드 설정 전달. 부팅·변경 시. **모든 필드 선택** — 있는 것만 반영. `med_times: []`이면 복약 알림 없음. `now`는 ESP32 시계 맞추기용(ESP32에는 시계가 없음) → 부팅 때 + **10분마다** `{"t":"settings","now":...}`만 보내도 됨 (2026-11-27 추가, B 확인 필요) | D |
-| `med_ack` | `due` ("HH:MM") | 음성으로 복약 확인됨 | D |
+| `settings` | `med_times` (["HH:MM", ...] 0~8개), `bpm`, `follow_limit_cm`, `now` ("HH:MM:SS", Pi 현지 시각) | 대시보드 설정 전달. 부팅·변경 시. **모든 필드 선택** — 있는 것만 반영. `med_times: []`이면 복약 알림 없음. `now`는 ESP32 시계 맞추기용(ESP32에는 시계가 없음) → 부팅 때 + **10분마다** `{"t":"settings","now":...}`만 보내도 됨 (2026-11-27 추가). Pi 구현 `pi/app/services/settings_sync.py`: ESP32 status가 끊겼다 다시 오면(로봇 재부팅) 바로 전체 재전송, 대시보드 설정은 20초마다 확인해 바뀌면 전송, 인터넷이 끊겨도 시계는 보냄 | D |
+| `med_ack` | `due` ("HH:MM") | 음성으로 복약 확인됨. 또 Pi가 이미 확인을 받은 복약을 로봇이 다시 알리면(로봇 재부팅) Pi가 보내 바로 끝냄 | D |
 | `sound` | `track` (int) | MP3 재생 | D |
 | `pi_low` | `pct` (int) | Pi 배터리 20% 미만 (값은 `pi/app/config.py`). 한 번만 보내고, 회복·충전 후 다시 내려가면 또 보냄. ESP32는 경보 모드 준비 + MP3 안내 (`MP3_TRACK_PI_LOW`) | B·D |
 | `shutdown` | `reason` (`"battery"` / `"power_loss"`) | Pi가 곧 안전 종료. 이후 `hb`가 끊기므로 ESP32는 MP3 경보 경로로 (D-001) | B·D |

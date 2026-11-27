@@ -98,7 +98,12 @@ class MedicationLog:
     method: Literal["touch", "voice"] | None = None
 
     def to_op(self) -> Op:
-        return Op("upsert", "medication_logs", {
+        # 로봇이 다시 켜져 같은 복약을 또 알리거나 확인 뒤에 missed를 보내도 confirmed를 덮지 않게:
+        #   pending → insert(이미 있으면 무시), missed → rpc(pending일 때만 바꿈, db 005), confirmed → upsert
+        if self.status == "missed":
+            return Op("rpc", "mark_medication_missed", {"p_due_at": _iso(self.due_at)})
+        kind = "insert" if self.status == "pending" else "upsert"
+        return Op(kind, "medication_logs", {
             "due_at": _iso(self.due_at),
             "status": self.status,
             "confirmed_at": _iso(self.confirmed_at) if self.confirmed_at else None,

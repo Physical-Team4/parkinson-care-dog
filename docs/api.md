@@ -53,7 +53,7 @@ TODO(D): 원래 명세의 실제 키 이름 확인 ([todo.md](todo.md)).
 
 | 기록 | Supabase | 본문 | 중복 방지 |
 |---|---|---|---|
-| F1 복약 | `upsert medication_logs` | `due_at`, `status`: pending / confirmed / missed, `confirmed_at`, `method`: touch / voice | `on_conflict=due_at` |
+| F1 복약 | pending: `insert medication_logs`(있으면 무시) · confirmed: `upsert` · missed: `rpc mark_medication_missed(p_due_at)` | `due_at`, `status`: pending / confirmed / missed, `confirmed_at`, `method`: touch / voice | `on_conflict=due_at`. **confirmed는 덮지 않음** (아래) |
 | F3 보행 | `insert gait_sessions` | `client_id`, `started_at`, `ended_at`, `avg_bpm`, `target_bpm`, `stop_count`, `restart_count` | `client_id` |
 | F4 발성 | `insert voice_sessions` | `client_id`, `started_at`, `ended_at`, `peak_db`, `target_db`, `attempts`, `success_count` | `client_id` |
 | F5 인식 | `insert speaker_events` | `client_id`, `occurred_at`, `speaker_local_id`, `score`, `accepted` | `client_id` |
@@ -61,7 +61,10 @@ TODO(D): 원래 명세의 실제 키 이름 확인 ([todo.md](todo.md)).
 
 - 형식 정의: `pi/app/views/api_schemas.py` (`MedicationLog`, `GaitSession`, `VoiceSession`, `SpeakerEvent`).
 - ESP32 `gait_end`의 `started_ms`/`ended_ms`(부팅 후 ms)는 Pi가 수신 시각 기준으로 실제 시각으로 바꾼다.
-- 복약 미확인은 알람(`report_alert medication_missed`)과 기록(`medication_logs status=missed`)을 **둘 다** 보낸다.
+- 복약 미확인은 알람(`report_alert medication_missed`)과 기록(`mark_medication_missed`)을 **둘 다** 보낸다.
+- F1 기록 규칙 (`pi/app/services/medication_sync.py`, 2026-11-27): 로봇이 재부팅되면 확인된 복약을 다시 알리고 30분 뒤 미확인을 보낼 수 있다.
+  pending은 이미 기록이 있으면 무시, missed는 pending일 때만 바꾼다(db 005) → confirmed는 그대로.
+  ESP32의 `due`("HH:MM")는 Pi 현지 날짜의 그 시각, 1시간 넘게 미래면 어제. 로봇이 잊어 30분+2분 지나도 pending이면 Pi가 missed 처리.
 - 화자 임베딩·이름은 보내지 않는다.
 
 ### 대시보드 ← Supabase

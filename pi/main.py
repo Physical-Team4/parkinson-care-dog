@@ -11,7 +11,9 @@ from pi.app.adapters import mock
 from pi.app.config import Settings, load_settings
 from pi.app.controllers.robot_controller import RobotController
 from pi.app.models.outbox import Outbox
+from pi.app.services.medication_sync import MedicationSync
 from pi.app.services.power import BatteryPolicy, PowerGuard
+from pi.app.services.settings_sync import SettingsSync
 from pi.app.services.sync import SyncService
 from pi.app.views import serial_messages as sm
 
@@ -43,16 +45,20 @@ def build(settings: Settings):
         outbox = Outbox(settings.queue_path)
     sync = SyncService(outbox, remote, settings.queue_max_backoff_s)
     ctrl = RobotController(sync, remote, power, settings.esp32_status_timeout_s)
+    ctrl.medication = MedicationSync(sync.submit, esp32.send, ctrl.next_id,
+                                     settings.medication_confirm_timeout_s, settings.medication_missed_grace_s)
+    settings_sync = SettingsSync(remote, esp32.send, settings.settings_poll_interval_s,
+                                 settings.esp32_clock_sync_interval_s)
     policy = BatteryPolicy(settings.pi_battery_low_pct, settings.pi_battery_low_clear_pct,
                            settings.pi_battery_shutdown_pct, settings.pi_shutdown_confirm_checks,
                            settings.pi_shutdown_on_power_loss)
     guard = PowerGuard(power, esp32, sync, host, policy, ctrl.next_id)
-    return esp32, ctrl, guard
+    return esp32, ctrl, guard, settings_sync
 
 
 def run(settings: Settings, max_seconds: float | None = None) -> None:
-    esp32, ctrl, guard = build(settings)
-    started = last_hb = last_status = last_flush = last_power = time.monotonic()
+    esp32, ctrl, guard, settings_sync = build(settings)
+    started = last_hb = last_status = last_flush = last_power = last_med = time.monotonic()
     try:
         while max_seconds is None or time.monotonic() - started < max_seconds:
             now = time.monotonic()
@@ -66,6 +72,10 @@ def run(settings: Settings, max_seconds: float | None = None) -> None:
             if now - last_status >= settings.status_interval_s:
                 ctrl.send_status()  # 실패하면 버림 (대기열 없음)
                 last_status = now
+            settings_sync.tick(now, ctrl.esp32_ok(now))   # 설정 바뀜·ESP32 재부팅 → settings, 10분마다 시계
+            if now - last_med >= settings.medication_check_interval_s:
+                ctrl.medication.tick()   # 로봇이 잊은 복약 대기 → missed
+                last_med = now
             if now - last_flush >= settings.queue_flush_interval_s:
                 ctrl.sync.flush()   # 끊겼던 동안 쌓인 알람·기록 재전송
                 last_flush = now
@@ -73,7 +83,7 @@ def run(settings: Settings, max_seconds: float | None = None) -> None:
             if msg is not None:
                 ctrl.handle_esp32_message(msg)
             # TODO(A): 비전 루프 — pose를 remote.broadcast(settings.pose_topic, "pose", ...)로 0.4초마다
-            # TODO(B): 음성 루프, 부팅 시 remote.fetch_settings() → ESP32 settings 전달
+            # TODO(B): 음성 루프 (음성 복약 확인은 ctrl.medication + sm.med_ack)
     finally:
         esp32.close()
 

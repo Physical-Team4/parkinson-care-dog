@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 from typing import Any, Callable
 
 from pi.app.adapters.base import PowerMonitor, RemoteStore
+from pi.app.services.medication_sync import MedicationSync
 from pi.app.services.sync import SyncService
 from pi.app.views import serial_messages as sm
 from pi.app.views.api_schemas import AlertReport, RobotStatus
@@ -23,8 +24,11 @@ def _utcnow() -> datetime:
 
 class RobotController:
     def __init__(self, sync: SyncService, remote: RemoteStore, power: PowerMonitor,
-                 esp32_timeout_s: float, clock: Callable[[], datetime] = _utcnow) -> None:
+                 esp32_timeout_s: float, clock: Callable[[], datetime] = _utcnow,
+                 medication: MedicationSync | None = None) -> None:
         self.sync = sync
+        # F1 복약 기록 (med_due/med_ok/med_missed). main.py는 ESP32 send를 넣은 것을 주입
+        self.medication = medication or MedicationSync(sync.submit, clock=clock)
         self.remote = remote
         self.power = power
         self.esp32_timeout_s = esp32_timeout_s
@@ -47,23 +51,25 @@ class RobotController:
             self._last_esp_status_at = now_s
         elif t == sm.TOUCH_SOS:
             self.sync.submit(AlertReport("touch", self.clock()).to_op())
-        elif t == sm.MED_MISSED:
-            self.sync.submit(AlertReport("medication_missed", self.clock(),
-                                         detail={"due": msg.get("due")}).to_op())
-            # TODO(D): MedicationLog(status="missed") — due "HH:MM" → 오늘 날짜 due_at 변환 규칙 확정 후
-        elif t in (sm.MED_DUE, sm.MED_OK, sm.GAIT_END):
-            # TODO(D, C): MedicationLog / GaitSession Op으로 변환해 sync.submit
+        elif t in (sm.MED_DUE, sm.MED_OK, sm.MED_MISSED):
+            self.medication.handle(msg)       # medication_logs + 미확인 알람
+        elif t == sm.GAIT_END:
+            # TODO(C): GaitSession Op으로 변환해 sync.submit
             log.info("esp32 %s: %s", t, msg)
         elif t == sm.ACK:
             pass  # TODO(B): 명령별 ack 대기 처리
         else:
             log.warning("unknown esp32 message: %s", msg)
 
+    def esp32_ok(self, now_s: float | None = None) -> bool:
+        """ESP32 status가 esp32_timeout_s 안에 왔는지."""
+        now_s = time.monotonic() if now_s is None else now_s
+        return (self._last_esp_status_at is not None
+                and now_s - self._last_esp_status_at <= self.esp32_timeout_s)
+
     # ── Pi → Supabase (2초마다, 대기열 없음) ──
     def build_status(self, now_s: float | None = None) -> RobotStatus:
-        now_s = time.monotonic() if now_s is None else now_s
-        fresh = (self._last_esp_status_at is not None
-                 and now_s - self._last_esp_status_at <= self.esp32_timeout_s)
+        fresh = self.esp32_ok(now_s)
         esp = self._last_esp_status if fresh else {}
         return RobotStatus(
             esp32_ok=fresh,

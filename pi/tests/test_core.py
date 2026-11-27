@@ -58,6 +58,9 @@ def test_log_ops_are_idempotent_on_retry():
     assert gait.payload["client_id"]
     med = MedicationLog(T0, "confirmed", T0, "touch").to_op()
     assert (med.kind, med.on_conflict) == ("upsert", "due_at")
+    assert MedicationLog(T0, "pending").to_op().kind == "insert"          # 있으면 무시 (confirmed 안 덮음)
+    missed = MedicationLog(T0, "missed").to_op()
+    assert (missed.kind, missed.target) == ("rpc", "mark_medication_missed")
 
 
 # ── 오프라인 대기열 ──
@@ -65,11 +68,13 @@ def test_queue_holds_ops_while_offline_and_resends_in_order():
     ctrl, remote, sync = make_ctrl(online=False)
     ctrl.handle_esp32_message({"t": "touch_sos"})
     ctrl.handle_esp32_message({"t": "med_missed", "due": "08:00"})
-    assert len(sync.outbox) == 2 and remote.executed == []
+    assert len(sync.outbox) == 3 and remote.executed == []   # touch 알람, 복약 missed 기록 + 알람
 
     remote.online = True
-    assert sync.flush(now=10**10) == 2
-    assert [op.payload["p_source"] for op in remote.executed] == ["touch", "medication_missed"]
+    assert sync.flush(now=10**10) == 3
+    alerts = [op.payload["p_source"] for op in remote.executed if op.target == "report_alert"]
+    assert alerts == ["touch", "medication_missed"]
+    assert [op.target for op in remote.executed][1] == "mark_medication_missed"
     assert len(sync.outbox) == 0
 
 
