@@ -27,7 +27,7 @@
 | `stop` | — | 보행·박자 정지 ("멈춰"). 음성·dB 측정 전에도 보냄 | C |
 | `bpm` | `bpm` | 박자 변경 | C |
 | `laser` | `on` (bool) | 레이저 강제 켜기/끄기 (기본은 박자 연동) | C |
-| `settings` | `med_times` (["HH:MM", ...] 1~8개), `bpm`, `follow_limit_cm` | 대시보드 설정 전달. 부팅·변경 시 | D |
+| `settings` | `med_times` (["HH:MM", ...] 0~8개), `bpm`, `follow_limit_cm`, `now` ("HH:MM:SS", Pi 현지 시각) | 대시보드 설정 전달. 부팅·변경 시. **모든 필드 선택** — 있는 것만 반영. `med_times: []`이면 복약 알림 없음. `now`는 ESP32 시계 맞추기용(ESP32에는 시계가 없음) → 부팅 때 + **10분마다** `{"t":"settings","now":...}`만 보내도 됨 (2026-11-27 추가, B 확인 필요) | D |
 | `med_ack` | `due` ("HH:MM") | 음성으로 복약 확인됨 | D |
 | `sound` | `track` (int) | MP3 재생 | D |
 | `pi_low` | `pct` (int) | Pi 배터리 20% 미만 (값은 `pi/app/config.py`). 한 번만 보내고, 회복·충전 후 다시 내려가면 또 보냄. ESP32는 경보 모드 준비 + MP3 안내 (`MP3_TRACK_PI_LOW`) | B·D |
@@ -46,6 +46,11 @@
 | `ack` | `id`, `ok`, `err?` | 명령 응답 | — |
 
 - `mode`: `idle` / `walking` / `paused`(ToF 대기) / `medication` / `alarm` (초안)
+- F1 복약 (`esp32/services/medication.py`):
+  - `now`를 한 번도 못 받았으면 복약 알림을 하지 않는다 (`# warn:` 출력). 시각을 추측하지 않는다.
+  - 복약 시각이 되면 `med_due` 1번 + MP3 `MP3_TRACK_MEDICATION`. 시각을 막 맞췄을 때 30분 안에 지난 복약은 바로 알리고, 그보다 오래된 것은 건너뛴다.
+  - 대기 중 짧은 터치 → `med_ok`(`method:"touch"`). Pi의 `med_ack`(음성)는 대기만 끝내고 `med_ok`는 보내지 않는다 (Pi가 이미 앎).
+  - `MED_CONFIRM_TIMEOUT_MS`(30분) 안에 확인이 없거나 다음 복약 시각이 먼저 오면 `med_missed`. 이때 Pi 무응답이면 MP3 경보.
 - `dog_battery_pct`: MechDog 배터리 전압을 2S 기준 약 6.4V = 0%, 8.4V = 100%로 직선 변환 (두 값은 `esp32/config.py`).
   보드에서 전압을 읽는 Python API는 확인 필요 ([mechdog-motion.md](mechdog-motion.md#배터리-전압)).
 - `robot_tipped`: IMU `read_angle()` 기울기(X·Y)가 임계값(`esp32/config.py`)을 넘으면 true. IMU는 기울기만 주고 방향(yaw)은 없음.

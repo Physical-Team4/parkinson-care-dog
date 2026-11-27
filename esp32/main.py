@@ -4,6 +4,7 @@ import utime
 import config
 from controllers.serial_cmd import SerialCommands, log
 from controllers.heartbeat import Heartbeat
+from drivers.buzzer import Buzzer
 from drivers.eyes import Eyes
 from drivers.laser import Laser
 from drivers.mp3 import Mp3
@@ -20,8 +21,9 @@ def main():
     mp3 = Mp3()
     gait = Gait()
     rhythm = Rhythm(laser, gait, mp3)
-    medication = Medication()
     eyes = Eyes()
+    buzzer = Buzzer()
+    medication = Medication(mp3, eyes, buzzer)
     touch = Touch(medication, mp3, eyes)
     serial = SerialCommands(hb, rhythm, medication)
 
@@ -32,6 +34,7 @@ def main():
             serial.poll()
             rhythm.tick(now)
             medication.tick(now, serial, hb)
+            buzzer.tick(now)
             touch.tick(now, serial, hb)
             if utime.ticks_diff(now, last_status) >= config.STATUS_INTERVAL_MS:
                 serial.send_status(rhythm, laser)
