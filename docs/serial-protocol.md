@@ -55,7 +55,9 @@
   - `MED_CONFIRM_TIMEOUT_MS`(30분) 안에 확인이 없거나 다음 복약 시각이 먼저 오면 `med_missed`. 이때 Pi 무응답이면 MP3 경보.
 - `dog_battery_pct`: MechDog 배터리 전압을 2S 기준 약 6.4V = 0%, 8.4V = 100%로 직선 변환 (두 값은 `esp32/config.py`).
   전압은 펌웨어 `Hiwonder.Battery_power()`(mV, 2026-11-27 확인). `DOG_BATTERY_MAX_VALID_MV`(8.9V)보다 높으면 LiPo가 아닌 외부 전원(보조배터리 등)으로 보고 `null` ([mechdog-motion.md](mechdog-motion.md#배터리-전압)).
-- `robot_tipped`: IMU `read_angle()` 기울기(X·Y)가 임계값(`esp32/config.py`)을 넘으면 true. IMU는 기울기만 주고 방향(yaw)은 없음.
+- `robot_tipped` (`esp32/services/tilt.py`): IMU `read_angle()` 기울기 X(좌우)나 Y(앞뒤)가 `TIP_ANGLE_DEG`(45°) 이상인 상태가
+  `TIP_HOLD_MS`(1초) 이어지면 true, 둘 다 `TIP_CLEAR_DEG`(30°) 미만으로 `TIP_CLEAR_MS`(2초) 이어지면 false (잠깐 들거나 부딪힌 것은 무시).
+  IMU를 못 쓰면 `null`. IMU는 기울기만 주고 방향(yaw)은 없음. true가 되면 Supabase 트리거가 `robot_tipped` 알람(warning)을 만든다.
 
 ## 제안 중 (합의 전, 아직 구현 안 함)
 - **로봇 이동** (A, 2026-11-27): `nav_move`(보폭 mm·각도 °·TTL)·`nav_stop`, `nav_blocked`, `status.front_cm`, `mode: navigating`,

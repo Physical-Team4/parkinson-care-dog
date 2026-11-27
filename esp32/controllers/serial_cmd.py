@@ -91,7 +91,7 @@ class SerialCommands:
                 reply["err"] = err
             send(reply)
 
-    def send_status(self, rhythm, laser, battery, now):
+    def send_status(self, rhythm, laser, battery, tilt, now):
         mode = rhythm.mode
         if mode == "idle" and self.medication.pending_due is not None:
             mode = "medication"           # 복약 확인 기다리는 중 (보행 중이면 보행이 먼저)
@@ -104,5 +104,5 @@ class SerialCommands:
             "follow_distance_cm": rhythm.follow_distance_cm,
             "laser_on": laser.is_on(),
             "bpm": rhythm.bpm if rhythm.mode == "walking" else None,
-            "robot_tipped": None,         # TODO(C/D): IMU(QMI8658)로 넘어짐 판단
+            "robot_tipped": tilt.tipped,  # IMU 기울기 (services/tilt.py). IMU 없으면 None
         })
