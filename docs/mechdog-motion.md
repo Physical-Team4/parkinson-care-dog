@@ -109,7 +109,10 @@ imu.read_angle()        # 기울기 (X·Y)
 
 ## 배터리 전압
 
-- 공식 시리얼 `CMD|6|$`는 **mV**를 준다 (참고용, 위 이유로 사용하지 않음). Python에서 읽는 API는 아직 확인 안 함 (TODO).
+- 공식 시리얼 `CMD|6|$`는 **mV**를 준다 (참고용, 위 이유로 사용하지 않음).
+- **Python: `import Hiwonder; Hiwonder.Battery_power()` → mV 정수** (2026-11-27 D 실기기 확인. 기본 `main.py`가 `CMD|6|`에 이 값을 보냄).
+  - 보조배터리(12V 출력)로 켰을 때 **12660으로 고정** → 보조배터리는 잔량과 상관없이 같은 전압이라 %를 알 수 없음. LiPo 실측은 아직.
+  - 펌웨어에는 저전압 경보(`Hiwonder.disableLowPowerAlarm`, 부저)도 있음 — 동작 조건 미확인.
 - 대시보드 `dog_battery_pct` 변환: 2S LiPo 기준 **약 6.4V = 0%, 8.4V = 100%** 사이 직선 변환. 두 전압은 `esp32/config.py` 설정값으로 둔다.
 
 ## F3 박자음 (MP3 모듈)

@@ -91,14 +91,14 @@ class SerialCommands:
                 reply["err"] = err
             send(reply)
 
-    def send_status(self, rhythm, laser):
+    def send_status(self, rhythm, laser, battery, now):
         mode = rhythm.mode
         if mode == "idle" and self.medication.pending_due is not None:
             mode = "medication"           # 복약 확인 기다리는 중 (보행 중이면 보행이 먼저)
         send({
             "t": "status",
             "mode": mode,
-            "dog_battery_pct": None,      # TODO(D): MechDog 배터리 전압 읽기
+            "dog_battery_pct": battery.pct(now),   # LiPo가 아니거나 못 읽으면 None (drivers/battery.py)
             "follow_distance_cm": rhythm.follow_distance_cm,
             "laser_on": laser.is_on(),
             "bpm": rhythm.bpm if rhythm.mode == "walking" else None,

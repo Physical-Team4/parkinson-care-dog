@@ -52,7 +52,7 @@
   - 대기 중 짧은 터치 → `med_ok`(`method:"touch"`). Pi의 `med_ack`(음성)는 대기만 끝내고 `med_ok`는 보내지 않는다 (Pi가 이미 앎).
   - `MED_CONFIRM_TIMEOUT_MS`(30분) 안에 확인이 없거나 다음 복약 시각이 먼저 오면 `med_missed`. 이때 Pi 무응답이면 MP3 경보.
 - `dog_battery_pct`: MechDog 배터리 전압을 2S 기준 약 6.4V = 0%, 8.4V = 100%로 직선 변환 (두 값은 `esp32/config.py`).
-  보드에서 전압을 읽는 Python API는 확인 필요 ([mechdog-motion.md](mechdog-motion.md#배터리-전압)).
+  전압은 펌웨어 `Hiwonder.Battery_power()`(mV, 2026-11-27 확인). `DOG_BATTERY_MAX_VALID_MV`(8.9V)보다 높으면 LiPo가 아닌 외부 전원(보조배터리 등)으로 보고 `null` ([mechdog-motion.md](mechdog-motion.md#배터리-전압)).
 - `robot_tipped`: IMU `read_angle()` 기울기(X·Y)가 임계값(`esp32/config.py`)을 넘으면 true. IMU는 기울기만 주고 방향(yaw)은 없음.
 
 ## 제안 중 (합의 전, 아직 구현 안 함)

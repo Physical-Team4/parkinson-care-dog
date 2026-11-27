@@ -54,7 +54,7 @@
 | 잠자리 마커 | 구현됨 (`SLEEP_MARKER_IDS`·`SLEEP_HOURS`). 집에서: 마커 붙일 위치(가려지지 않게), 근처 범위(`sleep_marker_margin`) 실측. 취침 시간대를 대시보드에서 정하려면 D와 협의 | A·D | F6 "발견 시 이미 누움" 판단 |
 | 취침 시간대 설정 | 잠자리 마커·F7과 함께 사용. 대시보드 설정이면 DB 변경 필요 | A·D | F6·F7 |
 | 로봇 이동 (마커 길찾기) | 설계 초안 [navigation.md](navigation.md), D-012 제안. 다음: M0 실측(§11, 스크립트 `esp32/m0/`, `pi/scripts/marker_test.py`), `nav_move`·`nav_stop` 시리얼 메시지 C·D 검토 | A·C·D | 이동, 카메라 공유(이동 중 마커 / 도착 후 사람) |
-| MechDog 배터리 전압 읽기 | 공식 시리얼 `CMD|6|$`(mV)는 사용 금지 프로토콜. Python API 확인 → `dog_battery_pct` (6.4V=0%, 8.4V=100%, `esp32/config.py`) | D | 대시보드 배터리 |
+| MechDog 배터리 전압 읽기 | 구현됨 (2026-11-27, `esp32/drivers/battery.py`): `Hiwonder.Battery_power()`(mV) → 6.4V=0%, 8.4V=100%, 8.9V 초과는 외부 전원으로 보고 `null`. 보조배터리로만 시험함(12660 고정) → **LiPo로 켜고 값·변화 확인**, 배터리 스티커(2S/3S) 확인, 멀티미터와 비교 | D | 대시보드 배터리 |
 | `robot_tipped` 임계값 | IMU `read_angle()` 기울기(X·Y)로 판단. M0 `sonar_imu_test.py`로 측정 후 `esp32/config.py` | C·D | 넘어짐, 이동 안전 정지 |
 | `move()` 범위 밖 각도 | 위키 범위 -30~30, 원본 코드는 ±40·±50 사용 → 잘림/오류 확인 (M0) | A·C | 걷기 값 |
 | E-FPDS (넘어진 사람 데이터셋) | 바닥에 쓰러짐 vs 쓰러지지 않음(소파·침대에 누움 포함) 2클래스, 6,982장. 공식 페이지에 라이선스 없음 → 저자 문의 후 사용. 제공 가중치는 YOLOv3 → YOLOv8 재학습 + DFC 변환 필요. pose 모델이 누운 사람을 잘 못 잡을 때 검토 | A | F6 보조 모델 |
