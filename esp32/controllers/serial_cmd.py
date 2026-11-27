@@ -95,6 +95,8 @@ class SerialCommands:
         mode = rhythm.mode
         if mode == "idle" and self.medication.pending_due is not None:
             mode = "medication"           # 복약 확인 기다리는 중 (보행 중이면 보행이 먼저)
+        elif mode == "idle" and battery.external_power(now):
+            mode = "charging"             # 충전기(외부 전원) 연결됨. 우선순위: 보행 > 복약 > 충전 > 대기
         send({
             "t": "status",
             "mode": mode,

@@ -45,7 +45,9 @@
 | `gait_end` | `started_ms`, `ended_ms`, `avg_bpm`, `stop_count`, `restart_count` | F3 세션 종료 요약 | 발생 시 |
 | `ack` | `id`, `ok`, `err?` | 명령 응답 | — |
 
-- `mode`: `idle` / `walking` / `paused`(ToF 대기) / `medication` / `alarm` (초안)
+- `mode`: `idle` / `walking` / `paused`(ToF 대기) / `medication` / `alarm` / `charging` (초안)
+  - `charging` (2026-11-27 추가, D): 대기 중에 전원 전압이 `DOG_BATTERY_MAX_VALID_MV`보다 높음 = 충전기·외부 전원 연결. 이때 `dog_battery_pct`는 `null`.
+    우선순위 보행 > 복약 알림 > 충전 > 대기. 멈춰 있는 모드라 F7 누적에는 영향 없음 (이동 모드 아님). 대시보드는 "충전 중"으로 표시.
 - F1 복약 (`esp32/services/medication.py`):
   - `now`를 한 번도 못 받았으면 복약 알림을 하지 않는다 (`# warn:` 출력). 시각을 추측하지 않는다.
   - 복약 시각이 되면 `med_due` 1번 + MP3 `MP3_TRACK_MEDICATION`. 시각을 막 맞췄을 때 30분 안에 지난 복약은 바로 알리고, 그보다 오래된 것은 건너뛴다.

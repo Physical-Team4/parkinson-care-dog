@@ -44,6 +44,12 @@ class Battery:
                 self._mv = None
         return self._mv
 
+    def external_power(self, now):
+        """충전기·보조배터리 등 외부 전원이 꽂혀 있으면 True (전압 > DOG_BATTERY_MAX_VALID_MV)."""
+        mv = self.mv(now)
+        max_valid = config.DOG_BATTERY_MAX_VALID_MV
+        return mv is not None and max_valid is not None and mv > max_valid
+
     def pct(self, now):
         mv = self.mv(now)
         pct = to_pct(mv)

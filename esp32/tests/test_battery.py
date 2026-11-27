@@ -47,6 +47,14 @@ def test_reads_every_interval_and_warns_once(monkeypatch):
     assert len(logs) == 1
 
 
+def test_external_power_flag(monkeypatch):
+    values = iter([12660, 7400])
+    monkeypatch.setitem(sys.modules, "Hiwonder", types.SimpleNamespace(Battery_power=lambda: next(values)))
+    b = bat.Battery()
+    assert b.external_power(0) is True                    # 충전기 꽂음 → mode "charging"
+    assert b.external_power(config.DOG_BATTERY_READ_MS) is False
+
+
 def test_no_firmware_module(monkeypatch):
     monkeypatch.delitem(sys.modules, "Hiwonder", raising=False)
     b = bat.Battery()
