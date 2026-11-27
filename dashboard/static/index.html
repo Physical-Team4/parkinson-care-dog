@@ -261,15 +261,18 @@ footer{font-size:12.5px;color:var(--muted);text-align:center;padding:8px 0 24px}
     <p class="big" id="statusText">확인 중…</p>
     <div id="statusSub" class="muted"></div>
     <div class="alert-line med" id="medNow" hidden aria-live="polite"></div>
-    <div id="active" style="display:grid;gap:10px"></div>
-    <div class="actions">
-      <button id="soundBtn" aria-pressed="false">🔔 알람 소리 켜기</button>
+    <!-- 모두 확인: 알람 목록이 길어도 찾기 쉽게 목록 위에 -->
+    <div class="actions" id="ackAllRow" hidden>
       <button id="ackAllBtn" type="button" hidden>✔ 모두 확인</button>
       <span id="ackAllAsk" class="actions" hidden style="align-items:center">
         <b id="ackAllText"></b>
         <button id="ackAllYes" type="button">예, 모두 확인</button>
         <button id="ackAllNo" type="button">취소</button>
       </span>
+    </div>
+    <div id="active" style="display:grid;gap:10px"></div>
+    <div class="actions">
+      <button id="soundBtn" aria-pressed="false">🔔 알람 소리 켜기</button>
     </div>
     <div class="muted" id="message" aria-live="polite"></div>
   </div>
@@ -619,6 +622,7 @@ function render(data){
   const asking = !$("ackAllAsk").hidden;
   if (active.length < 2) $("ackAllAsk").hidden = true;
   $("ackAllBtn").hidden = active.length < 2 || asking;
+  $("ackAllRow").hidden = active.length < 2;
   $("ackAllBtn").textContent = `✔ 알람 ${active.length}건 모두 확인`;
   $("ackAllText").textContent = `미확인 알람 ${active.length}건을 모두 확인 처리할까요?` + (hasCrit ? " (위급 알람 포함 — 환자 상태를 먼저 확인하세요)" : "");
 
