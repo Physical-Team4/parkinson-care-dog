@@ -10,6 +10,7 @@ sys.path.insert(0, str(ESP32))
 utime = types.ModuleType("utime")
 utime.ticks_diff = lambda a, b: a - b
 utime.ticks_ms = lambda: 0
+utime.ticks_add = lambda a, b: a + b
 sys.modules.setdefault("utime", utime)
 sys.modules.setdefault("ujson", __import__("json"))
 
@@ -41,6 +42,15 @@ class FakeEyes:
         self.calls.append("off")
 
 
+class FakeBuzzer:
+    def __init__(self):
+        self.beeps = []
+
+    def beep(self, tones, volume, gap_ms, now):
+        self.beeps.append((now, volume))
+        return True
+
+
 class FakeHb:
     def __init__(self, alive=True):
         self.alive = alive
@@ -56,10 +66,10 @@ def env(monkeypatch):
     monkeypatch.setattr(med_mod, "log", logs.append)
     monkeypatch.setattr(config, "MP3_TRACK_MEDICATION", 7)
     monkeypatch.setattr(config, "MP3_TRACK_ALARM", 9)
-    mp3, eyes = FakeMp3(), FakeEyes()
-    m = med_mod.Medication(mp3, eyes)
+    mp3, eyes, buzzer = FakeMp3(), FakeEyes(), FakeBuzzer()
+    m = med_mod.Medication(mp3, eyes, buzzer)
     m.set_times(["08:00"])
-    return types.SimpleNamespace(m=m, sent=sent, logs=logs, mp3=mp3, eyes=eyes, hb=FakeHb())
+    return types.SimpleNamespace(m=m, sent=sent, logs=logs, mp3=mp3, eyes=eyes, buzzer=buzzer, hb=FakeHb())
 
 
 def kinds(sent):
@@ -203,3 +213,42 @@ def test_eyes_off_when_missed(env):
     env.m.tick(TIMEOUT, None, env.hb)
     assert env.eyes.calls[-1] == "off"
     assert env.m.pending_due is None
+
+
+def test_soft_beep_at_due_and_every_minute_until_confirmed(env):
+    rep = config.MED_BEEP_REPEAT_MS
+    env.m.set_clock("08:00:00", 0)
+    env.m.tick(0, None, env.hb)
+    assert env.buzzer.beeps == [(0, config.MED_BEEP_VOLUME)]
+    env.m.tick(rep - 1, None, env.hb)
+    assert len(env.buzzer.beeps) == 1
+    env.m.tick(rep, None, env.hb)
+    env.m.tick(2 * rep, None, env.hb)
+    assert [b[0] for b in env.buzzer.beeps] == [0, rep, 2 * rep]
+    env.m.confirm("08:00", "touch")
+    env.m.tick(3 * rep, None, env.hb)
+    assert len(env.buzzer.beeps) == 3                   # 확인하면 그만
+
+
+def test_buzzer_driver_plays_tones_without_blocking(monkeypatch):
+    calls = []
+
+    class FakeBz:
+        def setVolume(self, v):
+            calls.append(("vol", v))
+
+        def playTone(self, f, ms, wait):
+            calls.append((f, ms, wait))
+
+    monkeypatch.setitem(sys.modules, "Hiwonder", types.SimpleNamespace(bz=FakeBz()))
+    from drivers.buzzer import Buzzer
+    b = Buzzer()
+    assert b.beep([(1500, 120), (1800, 120)], 100, 80, 1000)
+    b.tick(1000)
+    assert calls == [("vol", 100), (1500, 120, False)]  # 기다리지 않음
+    b.tick(1000 + 199)
+    assert len(calls) == 2                              # 120ms + 간격 80ms 전에는 다음 음 안 냄
+    b.tick(1000 + 200)
+    assert calls[-1] == (1800, 120, False)
+    b.tick(5000)
+    assert len(calls) == 4                              # 끝

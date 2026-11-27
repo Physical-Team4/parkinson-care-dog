@@ -35,6 +35,11 @@ MED_TIMES_DEFAULT = ["08:00", "12:30", "18:00", "22:00"]
 MED_CONFIRM_TIMEOUT_MS = 30 * 60 * 1000
 MED_EYES_COLOR = (0x00, 0x40, 0xFF)   # 복약 대기 중 눈 깜빡임 색 (파랑. 터치 주황·SOS 빨강·확인 초록과 구분)
 MED_BLINK_MS = 500                    # 켜짐/꺼짐 간격
+# 복약 대기 중 내장 부저 "삐빅" (MP3 안내음 트랙이 정해지기 전에도 소리로 알림). None이면 소리 끔
+MED_BEEP_TONES = [(1500, 120), (1800, 120)]   # (Hz, ms). 2026-11-27 실기기에서 음량 100으로 시험
+MED_BEEP_VOLUME = 100         # 부저 음량 (펌웨어 기본 500). 작게
+MED_BEEP_GAP_MS = 80
+MED_BEEP_REPEAT_MS = 60 * 1000   # 확인할 때까지 이 간격으로 다시 울림. None이면 처음 1번만
 
 # ── F3 박자 보행 ──
 BPM_MIN = 80

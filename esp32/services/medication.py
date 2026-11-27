@@ -1,5 +1,6 @@
 # F1 복약 알림 (담당: D). 형식·규칙: docs/serial-protocol.md "F1 복약".
-#   시각 도래 → med_due + MP3 + 확인할 때까지 눈 파랑 깜빡임 → 짧은 터치(med_ok) 또는 음성(Pi med_ack)으로 확인
+#   시각 도래 → med_due + MP3 + 확인할 때까지 눈 파랑 깜빡임·작은 부저 "삐빅"(1분마다)
+#   → 짧은 터치(med_ok) 또는 음성(Pi med_ack)으로 확인
 #   30분 미확인(또는 다음 복약 시각이 먼저 옴) → med_missed, Pi 무응답이면 MP3 경보 (D-001)
 # ESP32에는 시계가 없다 → Pi가 settings의 now("HH:MM:SS")로 알려 준 시각 + 그 뒤 흐른 ticks로 계산.
 # now를 못 받았으면 알림을 하지 않는다 (시각을 추측하지 않음).
@@ -27,9 +28,11 @@ def parse_hhmm(text, with_seconds=False):
 
 
 class Medication:
-    def __init__(self, mp3, eyes):
+    def __init__(self, mp3, eyes, buzzer):
         self._mp3 = mp3
         self._eyes = eyes
+        self._buzzer = buzzer
+        self._beep_at = None        # 마지막 "삐빅" 시각 (대기 중 MED_BEEP_REPEAT_MS마다 다시)
         self.hold_eyes = False      # 터치가 눈을 쓰는 중이면 True (Touch가 세움) → 깜빡임 멈춤
         self._blink_on = False
         self._blink_at = None
@@ -101,8 +104,16 @@ class Medication:
             else:
                 self._eyes.off()
 
+    def _beep(self, now):
+        if config.MED_BEEP_TONES:
+            self._buzzer.beep(config.MED_BEEP_TONES, config.MED_BEEP_VOLUME, config.MED_BEEP_GAP_MS, now)
+        self._beep_at = now
+
     def tick(self, now, serial, hb):
         self._blink(now)
+        if (self.pending_due is not None and config.MED_BEEP_REPEAT_MS
+                and utime.ticks_diff(now, self._beep_at) >= config.MED_BEEP_REPEAT_MS):
+            self._beep(now)                      # 확인할 때까지 작게 다시
         if self._clock_ref is None:
             if not self._warned and self.times:
                 log("warn: no clock from Pi (settings.now) -> medication off")
@@ -125,6 +136,7 @@ class Medication:
                 self._pending_since = now
                 send({"t": "med_due", "due": due})
                 self._mp3.play(config.MP3_TRACK_MEDICATION)   # None이면 Mp3가 생략
+                self._beep(now)
                 log("med due " + due)
                 break
 
