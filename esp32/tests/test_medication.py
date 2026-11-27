@@ -124,6 +124,17 @@ def test_missed_after_timeout_and_alarm_only_when_pi_down(env):
     assert env.mp3.played[-1] == 9
 
 
+def test_missed_alarm_uses_buzzer_when_no_track(env, monkeypatch):
+    monkeypatch.setattr(config, "MP3_TRACK_ALARM", None)
+    env.hb.alive = False
+    env.m.set_clock("08:00:00", 0)
+    env.m.tick(0, None, env.hb)
+    env.m.tick(TIMEOUT, None, env.hb)
+    assert kinds(env.sent)[-1] == ("med_missed", "08:00")
+    assert env.buzzer.tones == config.ALARM_BEEP_TONES
+    assert env.buzzer.beeps[-1] == (TIMEOUT, config.ALARM_BEEP_VOLUME)
+
+
 def test_voice_ack_clears_without_med_ok(env):
     env.m.set_clock("08:00:00", 0)
     env.m.tick(0, None, env.hb)

@@ -30,8 +30,8 @@
 | `settings` | `med_times` (["HH:MM", ...] 0~8개), `bpm`, `follow_limit_cm`, `now` ("HH:MM:SS", Pi 현지 시각) | 대시보드 설정 전달. 부팅·변경 시. **모든 필드 선택** — 있는 것만 반영. `med_times: []`이면 복약 알림 없음. `now`는 ESP32 시계 맞추기용(ESP32에는 시계가 없음) → 부팅 때 + **10분마다** `{"t":"settings","now":...}`만 보내도 됨 (2026-11-27 추가, B 확인 필요) | D |
 | `med_ack` | `due` ("HH:MM") | 음성으로 복약 확인됨 | D |
 | `sound` | `track` (int) | MP3 재생 | D |
-| `pi_low` | `pct` (int) | Pi 배터리 20% 미만 (값은 `pi/app/config.py`). 한 번만 보내고, 회복·충전 후 다시 내려가면 또 보냄. ESP32는 경보 모드 준비 + MP3 안내 (`MP3_TRACK_PI_LOW`) | B·D |
-| `shutdown` | `reason` (`"battery"` / `"power_loss"`) | Pi가 곧 안전 종료. 이후 `hb`가 끊기므로 ESP32는 MP3 경보 경로로 (D-001) | B·D |
+| `pi_low` | `pct` (int) | Pi 배터리 20% 미만 (값은 `pi/app/config.py`). 한 번만 보내고, 회복·충전 후 다시 내려가면 또 보냄. ESP32는 "충전해 주세요" 소리 1번 (`MP3_TRACK_PI_LOW`, None이면 내장 부저) | B·D |
+| `shutdown` | `reason` (`"battery"` / `"power_loss"`) | Pi가 곧 안전 종료. ESP32는 종료 소리 1번 (`MP3_TRACK_SHUTDOWN`, None이면 부저) + **받는 즉시 Pi 무응답으로 처리** → 이후 `touch_sos`·`med_missed`는 현장 경보 (D-001). 꺼지는 중에 `hb`가 더 와도 무응답 유지, `hb`가 5초 넘게 끊겼다가 다시 오면(재부팅) 정상 | B·D |
 
 ## ESP32 → Pi
 
@@ -52,7 +52,7 @@
   - `now`를 한 번도 못 받았으면 복약 알림을 하지 않는다 (`# warn:` 출력). 시각을 추측하지 않는다.
   - 복약 시각이 되면 `med_due` 1번 + MP3 `MP3_TRACK_MEDICATION`. 시각을 막 맞췄을 때 30분 안에 지난 복약은 바로 알리고, 그보다 오래된 것은 건너뛴다.
   - 대기 중 짧은 터치 → `med_ok`(`method:"touch"`). Pi의 `med_ack`(음성)는 대기만 끝내고 `med_ok`는 보내지 않는다 (Pi가 이미 앎).
-  - `MED_CONFIRM_TIMEOUT_MS`(30분) 안에 확인이 없거나 다음 복약 시각이 먼저 오면 `med_missed`. 이때 Pi 무응답이면 MP3 경보.
+  - `MED_CONFIRM_TIMEOUT_MS`(30분) 안에 확인이 없거나 다음 복약 시각이 먼저 오면 `med_missed`. 이때 Pi 무응답이면 현장 경보.
 - `dog_battery_pct`: MechDog 배터리 전압을 2S 기준 약 6.4V = 0%, 8.4V = 100%로 직선 변환 (두 값은 `esp32/config.py`).
   전압은 펌웨어 `Hiwonder.Battery_power()`(mV, 2026-11-27 확인). `DOG_BATTERY_MAX_VALID_MV`(8.9V)보다 높으면 LiPo가 아닌 외부 전원(보조배터리 등)으로 보고 `null` ([mechdog-motion.md](mechdog-motion.md#배터리-전압)).
 - `robot_tipped` (`esp32/services/tilt.py`): IMU `read_angle()` 기울기 X(좌우)나 Y(앞뒤)가 `TIP_ANGLE_DEG`(45°) 이상인 상태가
@@ -64,8 +64,9 @@
   ESP32 안전 규칙(초음파 정지·TTL 정지·기울기 정지). 상세는 [navigation.md](navigation.md) §6. C·D 검토 후 위 표로 옮긴다.
 
 ## 하트비트·장애 처리
-- ESP32는 `hb`가 **5초**(제안, `esp32/config.py` `PI_TIMEOUT_MS`) 넘게 안 오면 Pi 무응답으로 판단.
-  - 이때 `touch_sos`, `med_missed`가 발생하면 MP3 경보음으로 현장 경보 (원격 알림 불가, [decisions.md](decisions.md) D-001).
+- ESP32는 `hb`가 **5초**(제안, `esp32/config.py` `PI_TIMEOUT_MS`) 넘게 안 오면 Pi 무응답으로 판단 (`shutdown`을 받으면 바로).
+  - 이때 `touch_sos`, `med_missed`가 발생하면 현장 경보 (원격 알림 불가, [decisions.md](decisions.md) D-001).
+- 현장 소리 (`esp32/services/sounds.py`): MP3 트랙 번호(`MP3_TRACK_ALARM`·`_PI_LOW`·`_SHUTDOWN`)가 있으면 MP3, `None`이면 보드 내장 부저 (`ALARM_BEEP_*`, `PI_LOW_BEEP_TONES`, `SHUTDOWN_BEEP_TONES`).
 - Pi는 ESP32 `status`가 3초 넘게 안 오면 대시보드 `esp32_ok=false`.
 
 ## 예

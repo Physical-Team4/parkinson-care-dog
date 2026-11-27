@@ -26,8 +26,8 @@ def main():
     eyes = Eyes()
     buzzer = Buzzer()
     medication = Medication(mp3, eyes, buzzer)
-    touch = Touch(medication, mp3, eyes)
-    serial = SerialCommands(hb, rhythm, medication)
+    touch = Touch(medication, mp3, eyes, buzzer)
+    serial = SerialCommands(hb, rhythm, medication, mp3, buzzer)
     battery = Battery(log)
     tilt = Tilt(log)
 

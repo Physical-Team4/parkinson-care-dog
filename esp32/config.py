@@ -29,6 +29,15 @@ MP3_TRACK_BEAT = None       # TODO(C·D): SD카드에서 박자음(박수) 트�
 MP3_TRACK_ALARM = None
 MP3_TRACK_MEDICATION = None
 MP3_TRACK_PI_LOW = None     # TODO(D): "로봇 배터리를 충전해 주세요" 안내 (pi_low)
+MP3_TRACK_SHUTDOWN = None   # TODO(D): "로봇을 끕니다" 안내 (shutdown)
+
+# ── MP3 트랙이 None일 때 내장 부저로 대신 (services/sounds.py). (Hz, ms), Hz 0 = 쉼 ──
+# 2026-11-27 D 실기기에서 세 소리 모두 확인 (PC 중계로 pi_low·shutdown 흉내, Pi 꺼짐 중 터치 SOS → 경보). 음량 기준: 복약 "삐빅" 100(작게), 펌웨어 기본 500
+ALARM_BEEP_TONES = [(2000, 150), (0, 100)] * 10        # Pi 무응답 위급 경보: 빠른 삐삐삐 약 2.5초
+ALARM_BEEP_VOLUME = 300
+PI_LOW_BEEP_TONES = [(1200, 200), (900, 300), (0, 400)] * 3   # 배터리 부족: 내려가는 "띠-리" 3번
+SHUTDOWN_BEEP_TONES = [(1000, 300), (800, 300), (600, 600)]   # 꺼짐: 낮아지는 3음 1번
+NOTICE_BEEP_VOLUME = 150
 
 # ── MechDog 배터리 → status.dog_battery_pct (docs/serial-protocol.md, drivers/battery.py) ──
 # Hiwonder.Battery_power() = mV. 2S LiPo 기준 6.4V = 0%, 8.4V = 100% (serial-protocol.md에 정한 값)
