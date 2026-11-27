@@ -176,6 +176,7 @@ ul.plain{margin:0;padding-left:18px;display:grid;gap:4px;font-size:13.5px}
 .alert-line{font-size:13px;font-weight:700;border-radius:10px;padding:6px 10px}
 .alert-line.warn{background:var(--warn-soft);color:var(--warn)}
 .alert-line.crit{background:var(--crit-soft);color:var(--crit)}
+.alert-line.med{background:var(--brand-soft);color:var(--brand)}
 .meter .fill.low{background:var(--crit)}
 
 /* 자세(스틱맨) */
@@ -259,6 +260,7 @@ footer{font-size:12.5px;color:var(--muted);text-align:center;padding:8px 0 24px}
     <div class="muted">지금 상태</div>
     <p class="big" id="statusText">확인 중…</p>
     <div id="statusSub" class="muted"></div>
+    <div class="alert-line med" id="medNow" hidden aria-live="polite"></div>
     <div id="active" style="display:grid;gap:10px"></div>
     <div class="actions">
       <button id="soundBtn" aria-pressed="false">🔔 알람 소리 켜기</button>
@@ -808,6 +810,10 @@ async function loadMedication(){
     if (!r.enabled) li.style.opacity = ".55";
     return li;
   }));
+  // 로봇이 지금 알리고 있는 복약 (알람이 아니라 안내: 소리 없음. 30분 미확인이면 그때 🟠 알람)
+  const pend = rows.filter(r => r.status === "pending");
+  $("medNow").hidden = !pend.length;
+  $("medNow").textContent = pend.length ? `💊 ${pend.map(r => r.time).join(", ")} 복약 시간이에요 — 로봇이 알리는 중 (머리를 짧게 터치하면 복용 확인)` : "";
   const noLogs = !MOCK && !logs.length && rows.some(r => r.status === "nolog");
   $("medNote").hidden = !noLogs;
   $("medNote").textContent = "로봇이 아직 오늘 복약 기록을 보내지 않았어요. 기록이 오면 복용 확인·미확인이 표시돼요.";
@@ -899,8 +905,9 @@ function meter(valId, barId, cell, extra){
 async function refreshRobot(){
   let latest = robot.status, ok = true;
   try{ latest = await store.robotLatest(); }catch(e){ ok = false; }
-  const prev = robot.online;
+  const prev = robot.online, prevMode = robot.status?.mode;
   robot = M.robotView(latest, Date.now(), ok);
+  if (robot.status?.mode !== prevMode) loadMedication();   // "복약 알림 중"이 되거나 끝나면 30초 기다리지 않고 바로
   if (prev === false && robot.online === true) refreshAll("로봇이 다시 연결돼서 그동안 쌓인 기록을 새로 받았어요.");
   if (ok){ try{ followRows = await store.followHistory(Date.now() - 60000); }catch(e){ /* 그래프만 그대로 */ } }
   renderRobot();
