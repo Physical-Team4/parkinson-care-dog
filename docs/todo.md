@@ -34,10 +34,10 @@
 | ESP32 포트 1(IIC2) 핀 순서·VCC 전압 | 멀티미터 확인 예정 | C | VL53L1X 배선 |
 | MP3 모듈 I²C 버스 | pinmap은 IIC1(포트 2). F3 테스트에서는 IIC2로도 재생됨 → 실제 연결 포트 확인 | C·D | `MP3_I2C_BUS` |
 | F3 박자음 트랙 번호 | SD 카드에서 박수 소리 트랙 확인 필요 (테스트 때 30 사용) | C·D | `MP3_TRACK_BEAT` |
-| ESP32 포트 3 핀 순서·VCC 전압 | 확인 예정 | D | 터치, 레이저 방법 1 |
+| ESP32 포트 3 핀 순서·VCC 전압 | 확인 예정 | D | 터치 |
 | 터치 짧은 톡 의미 충돌 | `esp32/mainboard.py`(C)는 톡 = 박자 보행 시작/정지, `esp32/services/touch.py`(D)는 톡 = 복약 확인·3초 = SOS. 같은 센서(IO33) → 하나로 합칠 때 규칙 합의 필요 | C·D | F1·F2·F3 |
 | 터치 최소 시간 `TOUCH_MIN_TAP_MS` | 잠정 80ms. 실측(2026-11-26, D): 1차 정상 톡 100ms 이상·스침 53ms, 2차 무시된 접촉 19~72ms(7번). 60~72ms가 의도한 톡인지 → 어르신 사용 테스트로 재확인 | D | F1 오인식·누락 |
-| 레이저 연결 방법 | 방법 1(포트 3 공유) 채택 예정 | C·D | [decisions.md](decisions.md) D-002 |
+| ESP32 내부 포트 나머지 핀 용도 | 레이저는 IO23 확정(D-002). 3.62V 핀 1개는 용도 미확인 → 다른 장치 연결 전 확인 | C·B | 내부 포트 |
 | ESP32 내장 Wi-Fi 사용 가능 여부 | `import network` 테스트 예정 | D | Pi 꺼짐 시 알림 경로 |
 | Model Zoo hailo8l pose 모델 벤치마크 | yolov8s_pose, yolov8m_pose 등으로 FPS·지연·누운 자세 인식·전력 측정 → [benchmarks.md](benchmarks.md). 10fps 이상 중 가장 정확한 모델 선택 (D-010) | A | `hailo` adapter, F6·F7 |
 | Model Zoo 버전 (HailoRT 4.23) | 공식 대응표 없음. `download_models.sh --probe`로 열리는 버전 확인 후 [setup.md](setup.md) 2-3-2에 기록 | A | `.hef` 출처 |

@@ -11,7 +11,7 @@
 #   - In rhythmic cueing: follow the person behind
 #       person near -> normal stride, person farther -> smaller stride
 #       person lost -> stop and blink eyes, lost too long -> end rhythmic cueing
-# Added: laser module (KY-008, GPIO 23)
+# Added: laser module (KY-008, GPIO 23 on the internal port)
 #   - flashes on every beat together with the clap sound (rhythmic cueing only)
 
 import Hiwonder
@@ -65,7 +65,7 @@ TOF_BUS = 1                  # rear sensor found on bus 1 in testing (address 41
 TOF_ADDR = 0x29
 REAR_STOP_MM = 200           # rear obstacle closer than this -> stop (not in rhythmic cueing)
 REAR_STOP_ALL = False        # False: stop only backward walking, True: stop any walking
-DEBUG_REAR = True            # True: print rear distance every 0.5 s (set False when done testing)
+DEBUG_REAR = False           # True: print rear distance every 0.5 s (set False when done testing)
 
 # person following (rhythmic cueing only)
 FOLLOW_NEAR_MM = 500         # person this close or closer -> full stride
@@ -440,7 +440,10 @@ def start_main1():
             _self_balancing_flag = 0
             break
       if (step==70):
-        rhythmic_cueing()
+        try:
+          rhythmic_cueing()
+        finally:
+          laser_set(False)                    # laser off even if rhythmic cueing fails
       if (step==2):
         if (_ACTION_TYPE==1):
           mechdog.set_default_pose(duration = 500)

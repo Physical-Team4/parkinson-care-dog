@@ -1,4 +1,4 @@
-# 레이저 모듈 (담당: C). 연결 방법 미확정 (decisions D-002).
+# 레이저 모듈 KY-008 (담당: C). ESP32 내부 포트 IO23 (decisions D-002 방법 4).
 # 안전: 기본 꺼짐, 바닥만 향하게 장착. pin이 None이면 아무 동작 안 함.
 from machine import Pin
 
