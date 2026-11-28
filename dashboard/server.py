@@ -109,6 +109,15 @@ def add_dev_login(config: dict, env: Mapping[str, str], host: str) -> dict:
     return {**config, "devLogin": {"email": email, "password": password}}
 
 
+def auto_dev_login(config: dict, env: Mapping[str, str], host: str) -> dict:
+    """기본 동작: .env에 DASHBOARD_DEV_EMAIL·PASSWORD가 둘 다 있고 127.0.0.1이면 자동 로그인 (로그인 화면 없음).
+    조건이 안 맞으면 오류 없이 그대로 (로그인 화면). 제한은 add_dev_login과 같다."""
+    if host not in LOOPBACK or not (env.get("DASHBOARD_DEV_EMAIL") or "").strip() \
+            or not env.get("DASHBOARD_DEV_PASSWORD"):
+        return config
+    return add_dev_login(config, env, host)
+
+
 def csp(config: dict) -> str:
     connect = "'self'"
     if config.get("dataSource") == "supabase":
@@ -182,7 +191,9 @@ def main(argv=None) -> int:
     parser.add_argument("--env-file", default=str(DEFAULT_ENV_FILE), help="설정 파일 (기본: 레포 루트 .env)")
     parser.add_argument("--mock", action="store_true", help="Supabase 없이 Mock 데이터로 실행")
     parser.add_argument("--dev-login", action="store_true",
-                        help="개발용: 로그인 화면 없이 테스트 계정(DASHBOARD_DEV_EMAIL/PASSWORD)으로 자동 로그인. 127.0.0.1에서만")
+                        help="자동 로그인을 반드시 켬 (DASHBOARD_DEV_EMAIL/PASSWORD 없으면 시작 거부). "
+                             "기본도 두 값이 있으면 127.0.0.1에서 자동 로그인")
+    parser.add_argument("--no-auto-login", action="store_true", help="자동 로그인 끄기 (로그인 화면 확인용)")
     args = parser.parse_args(argv)
 
     import os
@@ -193,6 +204,8 @@ def main(argv=None) -> int:
         config = load_config(env)
         if args.dev_login:
             config = add_dev_login(config, env, args.host)
+        elif not args.no_auto_login:
+            config = auto_dev_login(config, env, args.host)
     except ConfigError as e:
         print("설정 오류:", e)
         return 1
@@ -206,7 +219,10 @@ def main(argv=None) -> int:
     mode = "Supabase 연결" if config["dataSource"] == "supabase" else "Mock (Supabase 없이 예시 데이터)"
     print(f"PD-Dog 대시보드 실행 중: http://{shown}:{port}  · 데이터: {mode}", flush=True)
     if "devLogin" in config:
-        print(f"개발용 자동 로그인 켜짐: {config['devLogin']['email']} (이 컴퓨터에서만)", flush=True)
+        print(f"자동 로그인 켜짐: {config['devLogin']['email']} (이 컴퓨터에서만)", flush=True)
+    elif config["dataSource"] == "supabase" and not args.no_auto_login:
+        print("로그인 화면 없이 쓰려면 .env에 DASHBOARD_DEV_EMAIL, DASHBOARD_DEV_PASSWORD를 넣으세요 (테스트 계정)",
+              flush=True)
     print("끄려면 Ctrl+C", flush=True)
     try:
         server.serve_forever()

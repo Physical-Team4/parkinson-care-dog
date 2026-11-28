@@ -74,6 +74,15 @@ class ConfigTest(unittest.TestCase):
         self.assertNotIn("devLogin", cfg)                                          # 플래그 없으면 안 들어감
         self.assertEqual(server.add_dev_login({"dataSource": "mock"}, env, "0.0.0.0"), {"dataSource": "mock"})
 
+    def test_auto_dev_login_default_when_both_values_on_loopback(self):
+        cfg = server.load_config({"SUPABASE_URL": URL, "SUPABASE_ANON_KEY": ANON})
+        env = {"DASHBOARD_DEV_EMAIL": "t@example.com", "DASHBOARD_DEV_PASSWORD": "pw"}
+        self.assertEqual(server.auto_dev_login(cfg, env, "127.0.0.1")["devLogin"]["email"], "t@example.com")
+        for host in ("0.0.0.0", "192.168.0.5"):                                    # 다른 기기: 오류 없이 로그인 화면
+            self.assertNotIn("devLogin", server.auto_dev_login(cfg, env, host))
+        self.assertNotIn("devLogin", server.auto_dev_login(cfg, {"DASHBOARD_DEV_EMAIL": "t@example.com"}, "127.0.0.1"))
+        self.assertNotIn("devLogin", server.auto_dev_login(cfg, {}, "127.0.0.1"))
+
     def test_csp_allows_only_supabase_and_pinned_cdn(self):
         c = server.csp({"dataSource": "supabase", "supabaseUrl": URL})
         self.assertIn(f"connect-src 'self' {URL} wss://example.supabase.co", c)

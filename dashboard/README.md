@@ -19,11 +19,13 @@ cd dashboard
 python server.py              # http://127.0.0.1:8000  (.env에 키가 있으면 Supabase, 없으면 Mock)
 python server.py --mock       # Supabase 없이 예시 데이터 + 시연 패널(가상 로봇·인터넷 끊김 흉내)
 python server.py --host 0.0.0.0   # 같은 와이파이의 휴대폰에서 보기
-python server.py --dev-login      # 개발용: 로그인 화면 없이 테스트 계정으로 자동 로그인 (아래)
+python server.py --no-auto-login  # 자동 로그인 끄기 (로그인 화면 확인용)
 ```
-- `--dev-login`: `.env`의 `DASHBOARD_DEV_EMAIL`·`DASHBOARD_DEV_PASSWORD`(**테스트 계정만**)로 자동 로그인.
-  계정 비밀번호가 `/config.js`로 브라우저에 가므로 **127.0.0.1에서만** 켜진다 (`--host 0.0.0.0`과 같이 쓰면 시작 거부,
-  다른 기기에서 온 요청에는 넣지 않음). DB 권한(RLS)은 그대로. 시연·실사용에서는 쓰지 않는다.
+- **자동 로그인 (기본)**: `.env`에 `DASHBOARD_DEV_EMAIL`·`DASHBOARD_DEV_PASSWORD`(**테스트 계정만**)가 있으면
+  로그인 화면 없이 그 계정으로 들어간다. 팀원은 처음 한 번 `.env`에 두 줄만 넣으면 된다 (비밀번호는 레포에 올리지 말고 따로 전달).
+  계정 비밀번호가 `/config.js`로 브라우저에 가므로 **127.0.0.1에서만** 켜진다 (`--host 0.0.0.0`이면 자동 로그인 없이 로그인 화면,
+  다른 기기에서 온 요청에는 넣지 않음). DB 권한(RLS)은 그대로. 실사용(실제 보호자 계정)에서는 두 값을 비워 둔다.
+  `--dev-login`은 두 값이 없으면 시작을 거부하는 엄격한 버전.
 - 로그인: Supabase Auth 이메일·비밀번호. **초대받고 `care_team`에 등록된 계정만** 데이터가 보인다 ([docs/setup.md](../docs/setup.md) 3번).
 - 브라우저는 `supabase-js@2.45.4`를 jsDelivr에서 받는다 (Supabase 모드만, 버전 고정). Mock 모드는 인터넷 없이 동작.
 
@@ -31,7 +33,7 @@ python server.py --dev-login      # 개발용: 로그인 화면 없이 테스트
 ```bash
 cd dashboard
 node --test "tests/*.test.mjs"           # Model·Mock store (22개)
-python -m unittest -v test_server.py     # 서버: 설정 주입·secret 키 거부·정적 파일·자동 로그인 제한 (16개)
+python -m unittest -v test_server.py     # 서버: 설정 주입·secret 키 거부·정적 파일·자동 로그인 제한 (17개)
 ```
 브라우저 E2E(Mock·Supabase) 결과는 [progress.md](progress.md).
 
