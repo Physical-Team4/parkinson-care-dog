@@ -4,6 +4,9 @@
     python -m pi.scripts.pose_viewer --hef ~/pd-dog-models/hailo8l/yolov8s_pose.hef            # 뼈대만
     python -m pi.scripts.pose_viewer --hef ~/pd-dog-models/hailo8l/yolov8s_pose.hef --video    # 카메라 화면 + 뼈대
     python -m pi.scripts.pose_viewer --markers --video                                         # + 로봇 이동 마커 표시
+    python -m pi.scripts.pose_viewer --markers-only --video                                    # Hailo 없이 카메라 + 마커만
+    python -m pi.scripts.pose_viewer --markers-only --video --marker-cm 12 --at-cm 100 --target-id 1
+                                                       # + 터미널 Enter로 정량 측정 (3초 준비 후 10초, 반복 가능)
     # 노트북
     ssh -L 8765:127.0.0.1:8765 <user>@<pi>     → 브라우저 http://localhost:8765
 
@@ -94,6 +97,16 @@ def _loop(camera, estimator, latest: Latest, encode_jpeg, stop: threading.Event,
             stop.wait(max(0.0, min_interval_s - (time.perf_counter() - t0)))
 
 
+class NoPose:
+    """--markers-only용: 포즈 추론 없이 항상 사람 없음 (Hailo·HEF 불필요)."""
+
+    def infer(self, frame) -> list:
+        return []
+
+    def close(self) -> None:
+        pass
+
+
 class Judge:
     """F6·F7 판정을 화면 확인용으로 돌린다. 알람은 Supabase로 보내지 않고 메모리 가짜(MockRemote)에만 쌓인다.
     로봇은 정지 상태로 가정 (ESP32 연결 없이 뷰어만 켜므로)."""
@@ -133,12 +146,15 @@ class MarkerView:
         self.detector = detector
         self.marker_cm, self.focal_px = marker_cm, focal_px
         self.last = []          # 마지막 프레임 마커 (Judge가 잠자리 판단에 씀)
+        self.measure = None     # --markers-only 측정 (MarkerMeasure). 같은 인식 결과를 받아 감
 
     def __call__(self, frame) -> dict:
         from pi.app.adapters.markers import estimate_bearing_deg, estimate_distance_cm
 
         found = self.detector.detect(frame)
         self.last = found
+        if self.measure:
+            self.measure.feed(found, self.detector.last_ms)
         def r(v, n=1):
             return None if v is None else round(v, n)
         return {"ms": round(self.detector.last_ms, 1), "list": [
@@ -146,6 +162,107 @@ class MarkerView:
              "side_px": round(m.side_px, 1),
              "dist_cm": r(estimate_distance_cm(m, self.marker_cm, self.focal_px), 0),
              "bearing_deg": r(estimate_bearing_deg(m, self.focal_px))} for m in found]}
+
+
+class MarkerMeasure:
+    """--markers-only 정량 측정. 뷰어 루프가 이미 인식한 결과만 모은다 (카메라·인식 추가 없음).
+    계산은 marker_test.py와 같음: 인식률, 한 변·가로 위치 중앙값, 초점거리 = 한 변 × 거리 / 크기, 인식 ms."""
+
+    def __init__(self) -> None:
+        self.lock = threading.Lock()
+        self.active, self.until, self.start_t = False, 0.0, 0.0
+        self.frames, self.side, self.off, self.times = 0, {}, {}, []
+
+    def start(self, seconds: float, now: float | None = None) -> None:
+        now = time.perf_counter() if now is None else now
+        with self.lock:
+            self.frames, self.side, self.off, self.times = 0, {}, {}, []
+            self.active, self.start_t, self.until = True, now, now + seconds
+
+    def stop(self, now: float | None = None) -> float:
+        """측정 끝. 실제 측정 시간(초)을 돌려준다."""
+        now = time.perf_counter() if now is None else now
+        with self.lock:
+            self.active = False
+            return min(now, self.until) - self.start_t
+
+    def feed(self, found, ms: float, now: float | None = None) -> None:
+        now = time.perf_counter() if now is None else now
+        with self.lock:
+            if not self.active or now > self.until:
+                return
+            self.frames += 1
+            self.times.append(ms)
+            for m in found:
+                self.side.setdefault(m.marker_id, []).append(m.side_px)
+                self.off.setdefault(m.marker_id, []).append(m.cx * 2 - 1)   # -1(왼쪽)~+1(오른쪽)
+
+    def summary(self, elapsed_s: float, marker_cm: float | None, at_cm: float | None,
+                target: int | None, note: str) -> list[str]:
+        import statistics as st
+        with self.lock:
+            frames, side, off, times = self.frames, dict(self.side), dict(self.off), list(self.times)
+        note = f"{note} (pose_viewer 스트리밍 병행)".strip()
+        size = f"{marker_cm:g}cm" if marker_cm else "?"
+        dist = f"{at_cm:g}cm" if at_cm else "?"
+        out = ["", "=== 측정 결과: pose_viewer --markers-only, 브라우저 스트리밍 병행 (marker_test.py 단독과 FPS 다를 수 있음) ===",
+               f"측정 {elapsed_s:.1f}초, {frames}프레임 ({frames / elapsed_s if elapsed_s > 0 else 0:.1f} fps)"]
+        if times:
+            out.append(f"마커 인식 시간: 중앙값 {st.median(times):.1f}ms, 최대 {max(times):.1f}ms (CPU)")
+        if not frames:
+            return out + ["프레임 0 → 뷰어 루프 오류 확인"]
+        ids = [target] if target is not None else sorted(side)
+        if not ids:
+            return out + [f"{frames}프레임 중 마커 인식 0 → 거리·크기·조명·초점 확인"]
+        rows = []
+        for i in ids:
+            v = side.get(i, [])
+            rate = len(v) / frames * 100
+            med = st.median(v) if v else None
+            focal = med * at_cm / marker_cm if med and at_cm and marker_cm else None
+            label = "목표 " if target is not None else ""
+            out.append(f"{label}#{i}: 인식률 {rate:.0f}% ({len(v)}/{frames})"
+                       + (f", 한 변 중앙값 {med:.1f}px, 가로 위치 중앙값 {st.median(off[i]):+.2f}" if v else "")
+                       + (f", 초점거리 추정 {focal:.0f}px (→ .env CAMERA_FOCAL_PX)" if focal else ""))
+            rows.append(f"| {size} | {dist} | {rate:.0f}% | {f'{med:.0f}' if med else '-'} | "
+                        f"{f'{focal:.0f}' if focal else '-'} | {note} |")
+        if target is not None:
+            others = {i: len(v) for i, v in sorted(side.items()) if i != target}
+            out.append("목표 외 검출: " + (", ".join(f"#{i} {n}프레임" for i, n in others.items()) or "없음"))
+        return out + ["navigation.md 표에 붙일 줄:"] + rows
+
+    def run(self, seconds: float, prep_s: float, marker_cm, at_cm, target, note) -> None:
+        """준비 시간 후 seconds 동안 기록하고 결과를 터미널에 찍는다."""
+        for k in range(int(prep_s), 0, -1):
+            print(f"  {k}…", flush=True)
+            time.sleep(1)
+        print(f"측정 시작 ({seconds:g}초)", flush=True)
+        self.start(seconds)
+        time.sleep(seconds)
+        print("\n".join(self.summary(self.stop(), marker_cm, at_cm, target, note)), flush=True)
+
+
+def measure_console(measure: MarkerMeasure, args, marker_cm: float | None) -> None:
+    """터미널에서 측정 시작. 뷰어는 계속 켜져 있고 여러 번 반복할 수 있다."""
+    at_cm, note = args.at_cm, args.note
+    while True:
+        try:
+            line = input(f"\n[측정] Enter=시작 (거리 {f'{at_cm:g}' if at_cm else '?'}cm, {args.seconds:g}초)"
+                         " | '<거리cm> [메모]'=바꾸고 시작 | q=측정 끝(뷰어 유지) > ").strip()
+        except EOFError:     # 터미널 입력 없음 (백그라운드 실행 등) → 측정 기능만 끔
+            return
+        if line == "q":
+            print("측정 끝. 뷰어는 Ctrl+C로 끕니다.", flush=True)
+            return
+        if line:
+            head, _, rest = line.partition(" ")
+            try:
+                at_cm = float(head)
+            except ValueError:
+                print("첫 값은 거리(cm) 숫자입니다. 예: 150 형광등 정면", flush=True)
+                continue
+            note = rest.strip() or note
+        measure.run(args.seconds, 3, marker_cm, at_cm, args.target_id, note)
 
 
 def make_handler(latest: Latest, video: bool, judge: Judge | None = None):
@@ -190,7 +307,21 @@ def main() -> None:
     ap.add_argument("--port", type=int, default=8765)
     ap.add_argument("--mock", action="store_true", help="하드웨어 없이 (PC에서 화면 확인용)")
     ap.add_argument("--markers", action="store_true", help="로봇 이동 마커(ArUco) 인식·표시 (CPU 추가 사용)")
+    ap.add_argument("--markers-only", action="store_true",
+                    help="포즈 추론 없이 카메라 + 마커만 (Hailo·HEF 불필요, F6·F7 판정 끔)")
+    g = ap.add_argument_group("--markers-only 측정 (터미널에서 Enter로 시작, 3초 준비)")
+    g.add_argument("--marker-cm", type=float, help="인쇄한 마커 검은 사각형 한 변 (cm). 기본: .env MARKER_SIZE_CM")
+    g.add_argument("--at-cm", type=float, help="카메라~마커 거리 (cm). 측정 때마다 바꿀 수 있음")
+    g.add_argument("--target-id", type=int, help="목표 마커 번호 (그 외 번호는 따로 기록)")
+    g.add_argument("--note", default="", help="표 비고 (조명·각도 등)")
+    g.add_argument("--seconds", type=float, default=10, help="측정 시간 (기본 10초)")
     args = ap.parse_args()
+    if args.target_id is not None and not 0 <= args.target_id < 50:
+        ap.error("DICT_4X4_50 마커 번호는 0~49")
+    if args.markers_only:
+        if args.hef:
+            ap.error("--markers-only는 포즈 추론을 하지 않으므로 --hef와 같이 쓸 수 없습니다.")
+        args.markers = True
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
     s = load_settings()
 
@@ -200,7 +331,12 @@ def main() -> None:
         from pi.app.adapters.base import PersonPose
         k = np.array([[0.5, 0.2 + 0.04 * i, 0.9] for i in range(17)], np.float32)  # 대충 세로로 선 사람
         camera = mock.MockCamera(s.camera_width, s.camera_height)
-        estimator = mock.MockPoseEstimator([[PersonPose((0.4, 0.15, 0.6, 0.9), 0.9, k)]])
+        estimator = (NoPose() if args.markers_only
+                     else mock.MockPoseEstimator([[PersonPose((0.4, 0.15, 0.6, 0.9), 0.9, k)]]))
+    elif args.markers_only:
+        from pi.app.adapters.camera import PiCamera
+        estimator = NoPose()
+        camera = PiCamera((s.camera_width, s.camera_height), s.camera_hflip, s.camera_vflip)
     else:
         from pi.app.adapters.camera import PiCamera
         from pi.app.adapters.hailo import HailoPoseEstimator
@@ -227,8 +363,11 @@ def main() -> None:
         if not (s.marker_size_cm and s.camera_focal_px):
             log.warning("MARKER_SIZE_CM·CAMERA_FOCAL_PX 미설정 → 마커 거리·방향 추정 끔 (M0 측정 후 .env)")
 
-    latest, stop, judge = Latest(), threading.Event(), Judge(s, marker_view)
-    if s.sleep_marker_ids and not args.markers:
+    latest, stop = Latest(), threading.Event()
+    judge = None if args.markers_only else Judge(s, marker_view)
+    if args.markers_only:
+        log.info("--markers-only: 포즈 추론·F6·F7 판정 끔 (Hailo 없이 카메라 + 마커만)")
+    elif s.sleep_marker_ids and not args.markers:
         log.warning("잠자리 마커가 설정돼 있지만 --markers가 꺼져 있음 → 잠자리 판단 안 함")
     worker = threading.Thread(target=run_loop, args=(camera, estimator, latest, encode_jpeg, stop, args.quality,
                                     0.1 if args.mock else 0.0, judge, marker_view),
@@ -238,6 +377,10 @@ def main() -> None:
     worker.start()
     log.info("http://127.0.0.1:%d  (노트북: ssh -L %d:127.0.0.1:%d <user>@<pi> 후 http://localhost:%d)",
              args.port, args.port, args.port, args.port)
+    if args.markers_only:   # 같은 루프의 인식 결과를 받아 측정 (카메라·인식 중복 없음)
+        marker_view.measure = MarkerMeasure()
+        threading.Thread(target=measure_console, args=(marker_view.measure, args, args.marker_cm or s.marker_size_cm),
+                         daemon=True).start()
     try:
         server.serve_forever()
     except KeyboardInterrupt:
