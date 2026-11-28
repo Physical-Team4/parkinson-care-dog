@@ -69,6 +69,8 @@ def run(settings: Settings, max_seconds: float | None = None) -> None:
             if now - last_hb >= settings.heartbeat_interval_s:
                 esp32.send(sm.heartbeat())
                 last_hb = now
+            if not esp32.connected:   # USB 분리·MechDog 꺼짐 → 예전 status를 바로 버림 (재연결은 adapter가)
+                ctrl.esp32_lost()
             if now - last_status >= settings.status_interval_s:
                 ctrl.send_status()  # 실패하면 버림 (대기열 없음)
                 last_status = now
