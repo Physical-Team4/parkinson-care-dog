@@ -61,6 +61,12 @@ class RobotController:
         else:
             log.warning("unknown esp32 message: %s", msg)
 
+    def esp32_lost(self) -> None:
+        """시리얼이 끊김 → 마지막 status를 바로 버린다 (타임아웃 3초를 기다리지 않음).
+        다시 연결돼도 새 status가 올 때까지 esp32_ok=false."""
+        self._last_esp_status = {}
+        self._last_esp_status_at = None
+
     def esp32_ok(self, now_s: float | None = None) -> bool:
         """ESP32 status가 esp32_timeout_s 안에 왔는지."""
         now_s = time.monotonic() if now_s is None else now_s

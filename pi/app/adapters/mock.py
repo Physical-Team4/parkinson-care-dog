@@ -15,17 +15,26 @@ log = logging.getLogger(__name__)
 
 
 class MockEsp32Link:
+    """connected=False로 USB 분리를 흉내 낸다: send는 dropped로, read는 None."""
+
     def __init__(self) -> None:
         self.sent: list[bytes] = []
+        self.dropped: list[bytes] = []
         self.inbox: deque[dict[str, Any]] = deque()
+        self.connected = True
 
     def send(self, line: bytes) -> None:
+        if not self.connected:
+            self.dropped.append(line)
+            return
         self.sent.append(line)
         msg = sm.decode(line)
         if msg and "id" in msg:
             self.inbox.append({"t": sm.ACK, "id": msg["id"], "ok": True})
 
     def read_message(self, timeout_s: float) -> dict[str, Any] | None:
+        if not self.connected:
+            return None
         return self.inbox.popleft() if self.inbox else None
 
     def close(self) -> None:
