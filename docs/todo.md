@@ -34,7 +34,7 @@
 | ESP32 포트 1(IIC2) 핀 순서·VCC 전압 | 멀티미터 확인 예정 | C | VL53L1X 배선 |
 | MP3 모듈 I²C 버스 | pinmap은 IIC1(포트 2). F3 테스트에서는 IIC2로도 재생됨 → 실제 연결 포트 확인 | C·D | `MP3_I2C_BUS` |
 | F3 박자음 트랙 번호 | SD 카드에서 박수 소리 트랙 확인 필요 (테스트 때 30 사용) | C·D | `MP3_TRACK_BEAT` |
-| ESP32 포트 3 핀 순서·VCC 전압 | 확인 예정 | D | 터치, 레이저 방법 1 |
+| ESP32 포트 3 핀 순서·VCC 전압 | 실측(2026-11-26, B): 1=GPIO32, 2=GPIO33, 3=GND, 4=5.08V (관찰 방향 기준 임시 번호, [기록](validation/2026-11-26-mechdog-port-validation.md)). 2026-11-28 키트 터치 센서를 포트 3에 연결해 IO33 터치 복약 확인 동작 확인 ([기록](validation/2026-11-28-esp32-serial-reconnection-validation.md) 4-6). 남은 것: 공식 핀맵·커넥터 방향, 레이저 공유 시 전압 | D | 터치, 레이저 방법 1 |
 | 터치 짧은 톡 의미 충돌 | `esp32/mainboard.py`(C)는 톡 = 박자 보행 시작/정지, `esp32/services/touch.py`(D)는 톡 = 복약 확인·3초 = SOS. 같은 센서(IO33) → 하나로 합칠 때 규칙 합의 필요 | C·D | F1·F2·F3 |
 | 터치 최소 시간 `TOUCH_MIN_TAP_MS` | 잠정 80ms. 실측(2026-11-26, D): 1차 정상 톡 100ms 이상·스침 53ms, 2차 무시된 접촉 19~72ms(7번). 60~72ms가 의도한 톡인지 → 어르신 사용 테스트로 재확인 | D | F1 오인식·누락 |
 | 레이저 연결 방법 | 방법 1(포트 3 공유) 채택 예정 | C·D | [decisions.md](decisions.md) D-002 |
@@ -55,6 +55,9 @@
 | 취침 시간대 설정 | 잠자리 마커·F7과 함께 사용. 대시보드 설정이면 DB 변경 필요 | A·D | F6·F7 |
 | 로봇 이동 (마커 길찾기) | 설계 초안 [navigation.md](navigation.md), D-012 제안. 다음: M0 실측(§11, 스크립트 `esp32/m0/`, `pi/scripts/marker_test.py`), `nav_move`·`nav_stop` 시리얼 메시지 C·D 검토 | A·C·D | 이동, 카메라 공유(이동 중 마커 / 도착 후 사람) |
 | MechDog 배터리 전압 읽기 | 구현됨 (2026-11-27, `esp32/drivers/battery.py`): `Hiwonder.Battery_power()`(mV) → 6.4V=0%, 8.4V=100%, 8.9V 초과는 외부 전원으로 보고 `null`. 보조배터리로만 시험함(12660 고정) → **LiPo로 켜고 값·변화 확인**, 배터리 스티커(2S/3S) 확인, 멀티미터와 비교 | D | 대시보드 배터리 |
+| MechDog 충전기 없이 `charging` 표시 | 2026-11-28 T3 재검증 중 충전기를 연결하지 않았는데 17:31–17:41 `mode=charging` (17:17에는 `idle`). 외부 전원 판정(8.9V 초과) 실측 전압 미확인. PR #42 "MechDog 충전 감지"(충전기 연결해도 `idle`)와 반대 증상 → 함께 확인. [기록](validation/2026-11-28-esp32-serial-reconnection-validation.md) 5절 | D | 대시보드 모드·충전 표시 |
+| Pi 통신 끊김 시 ESP32 보행 안전 정지 | ESP32는 `hb` 5초 끊김 시 알람만 현장 소리로 바꾸고 보행(`rhythm`)은 계속함. USB만 빠지고 전원이 켜져 있으면 걷던 동작 유지 가능 → 정지 규칙 또는 이동 명령 TTL 결정 ([navigation.md](navigation.md)). [기록](validation/2026-11-28-esp32-serial-reconnection-validation.md) 8절 | C·D | F3 보행·이동 안전 |
+| 시리얼 끊긴 동안 Pi → ESP32 메시지 | 2026-11-28 수정(B)으로 끊긴 동안 보내는 `med_ack`·`pi_low`·`shutdown`·`settings`는 버림 (재연결 뒤 예전 명령 실행 방지). `settings`는 재연결 때 재전송, `shutdown`은 ESP32 `hb` 끊김 판단으로 대체. 음성 복약 확인 구현 시 `med_ack` 재전송 여부 결정 | B·D | F1 음성 확인, Pi 전원 경보 |
 | `robot_tipped` 임계값 | 구현됨 (2026-11-27, `esp32/services/tilt.py`): 45° 이상 1초 → 넘어짐, 30° 미만 2초 → 해제. 정지 자세 실측(바닥 ±0.5°, 옆 -60~-77°, 앞뒤 34°/-42°, 뒤집기 ±178°)으로 정함, 실기기에서 대시보드 알람까지 확인. **보행 중 흔들림은 아직 안 잼** → C와 F3 보행하며 각도 기록 후 조정 | C·D | 넘어짐, 이동 안전 정지 |
 | `move()` 범위 밖 각도 | 위키 범위 -30~30, 원본 코드는 ±40·±50 사용 → 잘림/오류 확인 (M0) | A·C | 걷기 값 |
 | E-FPDS (넘어진 사람 데이터셋) | 바닥에 쓰러짐 vs 쓰러지지 않음(소파·침대에 누움 포함) 2클래스, 6,982장. 공식 페이지에 라이선스 없음 → 저자 문의 후 사용. 제공 가중치는 YOLOv3 → YOLOv8 재학습 + DFC 변환 필요. pose 모델이 누운 사람을 잘 못 잡을 때 검토 | A | F6 보조 모델 |
